@@ -1,144 +1,380 @@
 
 
---  Copyright (c) 2019 Parke Bostrom, parke.nexus at gmail.com
+--  Copyright (c) 2020 Parke Bostrom, parke.nexus at gmail.com
 --  See the copyright notice at the end of this file.
---  Version 0.0.20191228
 
 
-do    -----------------------  install a new _ENV that can "see through" to _G
+--  20200206  todo  unit testing of falses, both in strings and commands
+
+
+do    --------------------------------------------------  module encapsulation
+  --  install a new _ENV that can "see through" to _G
   local  _G, mt  =  _G, {}
   function  mt .__index ( t, k )  return _G [ k ]  end
   _ENV  =  setmetatable ( {}, mt )  end
 
 
+version  =  '0.0.20200211'
+
+
+function  assert_no_varargs  ( ... )    -------------------  assert_no_varargs
+  assert ( select ( '#' , ... ) == 0, select ( '#', ... ) )  end
+
+
+function  basename  ( path )    ------------------------------------  basename
+  path  =  expand ( path, 2 )
+  return  path : match '^.*/([^/]*)$'  end
+
+
 function  cap  ( o, ... )    --------------------------------------------  cap
-  o  =  normalize ( o, 'capture', true )
-  if  o .rstrip == nil  then  o .rstrip  =  true  end
-  --  note  the tail call of sh() is required to scrape the correct locals
-  return  sh ( o, ... )  end
+  return  sh ( normalize ( o, 2, 'capture', true, 'rstrip', true ), ... )  end
 
 
-function  cat  ( path )    ----------------------------------------------  cat
+function  cat  ( o, ... )    --------------------------------------------  cat
 
-  --  todo?  remove the asserts, return an error code instead?
-  --  or, alternatively, ignore errors if path starts with '-'  ??
+  assert_no_varargs ( ... )
 
-  local  f   =  assert ( io .open ( path, 'r' ) )
-  local  rv  =  assert ( f : read 'a' )
-  f : close()
-  return  rv  end
+  local function  open_write  ( path, mode, text )
+    if  type(text) == 'string'  then
+      local  f  =  assert ( io .open ( path, mode ) )
+      assert ( f : write ( text ) )
+      f : close()  ;  return  end
+    if  type(text) == 'table'  then
+      local  f  =  assert ( io .open ( path, mode ) )
+      for  s  in  each ( text )  do
+        assert ( type(s) == 'string' )
+        assert ( f : write ( s ) )  end
+      f : close()  ;  return  end
+    error ( 'cat  open_write  bad type  ' .. type(text) )  end
+
+  local function  append  ( path, o )
+    --  return   cat_write ( o, expand ( o .append, 3 ), 'ab' )  end
+    return  open_write ( path, 'ab', o .append )  end
+
+  local function  read_keys  ( path, o )
+    local  f     =  assert ( io .open ( path, 'rb' ) )
+    local  rv    =  {}
+    for  line  in  f : lines()  do  rv [ line ]  =  line  end
+    f : close()
+    return  rv  end
+
+  local function  write  ( path, o )
+    --  return   cat_write ( o, expand ( o .stdout, 3 ), 'wb' )  end
+    return  open_write ( path, 'wb', o .write )  end
+
+  if  type ( o ) == 'string'  then
+    --  todo?  remove the asserts, return an error code instead?
+    --  or, alternatively, ignore errors if path starts with '-'  ??
+    local  path  =  expand ( o, 2 )
+    local  f     =  assert ( io .open ( path, 'r' ) )
+    local  rv    =  assert ( f : read 'a' )
+    f : close()
+    return  rv  end
+
+  if  type ( o ) == 'table'  then
+    assert ( # o == 1, 'cat  error  # o ~= 1' )
+    assert ( type(o[1]) == 'string' )
+    local  path  =  expand ( o[1], 2 )
+    if  o .append     then  return  append    ( path, o )  end
+    if  o .read_keys  then  return  read_keys ( path, o )  end
+    if  o .write      then  return  write     ( path, o )  end  end
+
+  error  'cat failed'  end
+
+
+function  cd  ( path, trace )    -----------------------------------------  cd
+  path  =  expand ( path, 2 )
+  --  local  lfs  =  require 'lfs'
+  local  unistd  =  require 'posix.unistd'
+  if  trace  then  echo 'cd  $path'  end
+  return  assert ( unistd .chdir ( path ) )  end
+
+
+function  collapse  ( s )    ---------------------------------------  collapse
+  return  s : gsub ( '%$%$', '$' )  end
 
 
 function  cond  ( o, ... )    ------------------------------------------  cond
-  --  note  the tail call of sh() is required to scrape the correct locals
-  return  sh ( normalize ( o, 'ignore', true ), ... )  end
+  return  sh ( normalize ( o, 2, 'ignore', true ), ... )  end
+
+
+function  count  ( n )    ---------------------------------------------  count
+  --  count from n to infinity and beyond
+  local function  iter  ( state, n )  return  n + 1  end
+  return  iter, nil, n-1  end
+
+
+function  dirname  ( s )    -----------------------------------------  dirname
+  return  s : match '^(.*)/'  end
+
+
+function  each  ( t )    -----------------------------------------------  each
+  if  type(t) == 'function'  then  t  =  t()  end
+  assert ( type(t) == 'table', type(t) )
+  local function  iter  ( st )
+    local  rv  ;  st[2], rv  =  next ( st[1], st[2] )
+    return  rv  end
+  return  iter, {t,nil}, nil  end
 
 
 function  echo  ( s, ... )    ------------------------------------------  echo
   --  temporary kludge?  perhaps echo should have custom expansion?
+  if  s == nil  then  print()  ;  return  end
   local  command  =  expand_command ( s , 2, ... )
   return  print ( command )  end
-
-
-function  expand_key  ( k, locals )    ---------------------------  expand_key
-  return  expand_value ( expand_lookup ( k, locals ), locals )  end
 
 
 local  nil_flag  =  {}    --  this empty table represents nil
 
 
-function  expand_lookup  ( k, locals )    ---------------------  expand_lookup
-  --  print ( 'expand_lookup  ' .. k )
-  function  decode(v)
+function  expand_check ( o )    --------------------------------  expand_check
+  assert ( type(o)        == 'table' )
+  assert ( type(o.env)    == 'table' )
+  assert ( type(o.locals) == 'table' )  end
+
+
+function  expand_key  ( k, o )    --------------------------------  expand_key
+  expand_check ( o )
+
+  --  print ( 'expand_key  ' .. k )
+
+  function  decode  ( k, v )
+    if  v == nil_flag  then
+      --  print ( 'expand_key  warning  is nil  ' .. k )
+      end
     if  v == nil_flag  then  return  nil  else  return  v  end  end
+
+  local  loc, env, get, ev  =  o.locals, o.env, os.getenv, expand_value
   local  v
-  v  =  locals [ k ]      ;  if  v ~= nil  then  return  decode(v)  end
-  v  =  _G [ k ]          ;  if  v ~= nil  then  return  v          end
-  v  =  os .getenv ( k )  ;  if  v ~= nil  then  return  v          end
+  v  =  loc [ k ]  ;  if  v ~= nil  then  return  ( ev(decode(k,v),o) )  end
+  v  =  env [ k ]  ;  if  v ~= nil  then  return  ( ev(v,o)           )  end
+  v  =  get ( k )  ;  if  v ~= nil  then  return  v                      end
   return  ''  end
 
 
-function  expand_string  ( s, locals )    ---------------------  expand_string
+function  expand_string  ( s, o )    --------------------------  expand_string
+  expand_check ( o )
   --  print ( 'expand_string  ' .. s )
   assert ( type(s) == 'string' )
-  local function  replace  ( k, c )
-    if  c == '$'  then  return  k  end
-    local  rv  =  expand_key ( k, locals )
-    assert ( type(rv) == 'string' )
+  local  k  =  s : match '^$([%w_]+)$'
+  if  k  then
+    local  rv  =  expand_key ( k, o )
+    --  print ( 'expand_string', k, rv )
+    return  rv end
+  local function  replace  ( all, k, c )
+    if  c == '$'  then  return  all  end
+    local  rv  =  expand_key ( k, o )
+    if  rv == false  then  rv  =  ''  end
+    if  type(rv) ~= 'string'  then
+      print  ''
+      print  'expand_string  failed  bad type in expansion'
+      print  ( '  s   ' .. s )
+      print  ( '  k   ' .. k )
+      print  ( '  rv  ' .. tostring ( rv ) )
+      print  ''  end
+    assert ( type(rv) == 'string', s .. '  ' .. type(rv) )
     return  rv  end
-  return  ( s : gsub ( '%$((.)[%w_]*)', replace ) )  end
+  return  ( s : gsub ( '(%$((.)[%w_]*))', replace ) )  end
 
 
-function  expand_table  ( t, locals )    -----------------------  expand_table
+function  expand_table  ( t, o )    ----------------------------  expand_table
+  expand_check ( o )
   assert ( type(t) == 'table' )
   local  rv  =  {}
-  for  n, v  in  ipairs ( t )  do  rv[n]  =  expand_value ( v, locals )  end
+  for  n, v  in  ipairs ( t )  do  rv[n]  =  expand_value ( v, o )  end
   return  rv  end
 
 
-function  expand_value  ( v, locals )    -----------------------  expand_value
-  if  type(v) == 'string'  then  return  expand_string ( v, locals )  end
-  if  type(v) == 'table'   then  return  expand_table  ( v, locals )  end
+function  expand_value  ( v, o )    ----------------------------  expand_value
+  expand_check ( o )
+  if  type(v) == 'function'  then  v  =  v()  end
+  if  type(v) == 'string'    then  return  ( expand_string   ( v, o ) )  end
+  if  type(v) == 'table'     then  return  ( expand_table    ( v, o ) )  end
+  if  v       == false       then  return  false  end
+  if  v       == nil         then  return  nil    end
   error ( 'expand  bad type  ' .. type(v) )  end
 
 
-function  expand_command  ( o, level, ... )    ---------------  expand_command
+function  expand  ( s, level, ... )    -------------------------------  expand
+  assert ( type(s) == 'string' )
+  assert ( type(level) == 'nil'  or  type(level) == 'number', type(level) )
+  assert_no_varargs ( ... )
+  local  info  =  info_scrape ( ( level or 1 ) + 1 )
+  return  expand_string ( s, info )  end
 
-  o  =  normalize ( o )
 
-  local  locals  =  {}
-  for  n = 1,999  do    --  scrape locals
-    local  k, v  =  debug .getlocal ( (level or 1)+1, n )
-    if  k == nil  then  break  end
-    locals [ k ]  =  v == nil  and  nil_flag  or  v  end
+function  expand_template  ( s, info )    -------------------  expand_template
 
-  local function  command  ( o )  return  o[1] : match '^-?(.*)'  end
+  assert ( type(s) == 'string' )
+  expand_check ( info )
+
+  local function  command  ( s )  return  s : match '^-?(.*)$'  end
 
   local function  flatten  ( t, rv )
     local  rv  =  rv  or  {}
     for  n, v  in  ipairs ( t )  do
-      if  type(v) == 'table'
-        then  flatten ( v, rv )
-        else  table .insert ( rv, quote ( v ) )  end  end
+      if  v == false  then    --  do nothing
+      elseif  type(v) == 'string'  then  table .insert ( rv, quote ( v ) )
+      elseif  type(v) == 'table'   then  flatten ( v, rv )
+      else  error ( 'bad type  ' .. type(v) )  end  end
     return  table .concat ( rv, '  ' )  end
 
   local function  replace  ( k, c )
     if  c == '$'  then  return  k  end
-    local  v  =  expand_key ( k, locals )
-    if  type(v) == 'string'  then  return  quote   ( v )  end
-    if  type(v) == 'table'   then  return  flatten ( v )  end
+    local  v  =  expand_key ( k, info )
+    if  v == false           then  return  ''  end
+    if  v == nil             then  return  ''  end
+    if  type(v) == 'string'  then  return  ( quote   ( v ) )  end
+    if  type(v) == 'table'   then  return  ( flatten ( v ) )  end
     error ( ('command  bad type  %s  %s') : format ( k, type(v) ) )  end
 
-  local function  append  ( t, v )
-    if  v == nil  then  return  end
-    table .insert ( t, quote ( v ) )  end
+  return  ( command(s) : gsub ( '%$((.)[%w_]*)', replace ) )  end
 
-  local  rv  =  { ( command(o) : gsub ( '%$((.)[%w_]*)', replace ) ) }
-  for  n = 2,#o  do  append ( rv, o[n] )  end
-  local  varargs  =  { ... }
-  for  n = 1,#varargs  do  append ( rv, varargs [ n ] )  end
-  return  table .concat ( rv, '  ' )  end
+
+function  expand_command  ( o, level, ... )    ---------------  expand_command
+
+  assert_no_varargs ( ... )
+
+  local  function  flatten_and_quote  ( v, rv )
+    rv  =  rv  or  {}
+    if  v == false  then  --  do nothing
+    elseif  type(v) == 'string'  then  table .insert ( rv, quote ( v ) )
+    elseif  type(v) == 'table'   then
+      for  n, v  in  ipairs ( v )  do  flatten_and_quote ( v, rv )  end  end
+    return  rv  end
+
+  local  o  =  normalize ( o, (level or 1 ) + 1 )
+
+  if  type(o[1]) == 'string'  then
+    local  first     =  { ( expand_template ( o[1], o .info_scrape ) ) }
+    local  rest      =  table .move ( o, 2, #o, 1, {} )
+    local  expanded  =  expand_table ( rest, o .info_scrape )
+    local  quoted    =  flatten_and_quote ( expanded, first )
+    return  table .concat ( quoted, '  ' )  end
+
+  local  expanded  =  expand_table ( o, o .info_scrape )
+  local  quoted    =  flatten_and_quote ( expanded, rv )
+  return  table .concat ( quoted, '  ' )  end
+
+
+function  export  ( s )    -------------------------------------------  export
+  --  print ()
+  --  print ( 'export', s )
+  local  name, value  =  s : match '^([%w_]+)=(.*)$'
+  assert ( name )
+  --  print ( 'export', name, value )
+  value  =  collapse ( expand ( value, 2 ) )
+  --  print ( 'export', name, value )
+  local  stdlib  =  require 'posix.stdlib'
+  stdlib .setenv ( name, value )  end
+
+
+function  getcwd  ()    ----------------------------------------------  getcwd
+  local  unistd  =  require 'posix.unistd'
+  return  unistd .getcwd()  end
+
+
+function  glob  ( s )    -----------------------------------------------  glob
+  local  glob  =  require  'posix.glob'
+  local  t, k, v  =  glob .glob  ( expand ( s, 2 ), 0 ), nil, nil
+  assert ( type(t) == 'table' )
+  function  glob_next  ()
+    k, v  =  next ( t, k )
+    return  v  end
+  return  glob_next  end
+
+
+function  in_list  ( k, s )    --------------------------------------  in_list
+  for  s  in  s : gmatch '%S+'  do
+    if  s == k  then  return  true  end  end
+  return  false  end
+
+
+function  info_scrape  ( level )    -----------------------------  info_scrape
+
+  function  assert_no_tail_calls  ( level )
+    for  n = 1, level+1  do
+      local  info  =  debug .getinfo ( n, 't' )
+      assert ( info .istailcall == false, 'detected problematic tail call' )
+      end  end
+
+  function  env_scrape_trace  ()
+    for  n  in  count ( 1 )  do
+      local  info  =  debug .getinfo ( n, 'flnt' )
+      if  info == nil  then  break  end
+      print  ( info .currentline, info .istailcall, info .name )
+      end  end
+
+  function  env_scrape  ( level )
+    --  note  20200206
+    --    at present, env_scrape does not look for locals named _ENV.
+    --    this is a bug.
+    --  env_scrape_trace()
+    for  level  in  count ( level + 1 )  do
+      local  info  =  debug .getinfo ( level, 'flS' )
+      --  print ( info, info .func, info .short_src, info .currentline  )
+      for  upval  in  count ( 1 )  do
+        local  k, v  =  debug .getupvalue ( info .func, upval )
+        if  k == nil  then  break  end
+        --  print ( upval, k )
+        if  k == '_ENV'  then  return  v  end  end
+      error 'env_scrape  not found  _ENV'  end  end
+
+      --  20200208
+      --  print ( 'env_scrape  _ENV  ' .. tostring ( v ) )
+      --  if  k == '_ENV'  then  return  v  end  end  end
+
+  function  locals_scrape  ( level )
+    assert ( type(level) == 'number' )
+    --  print ( 'locals_scrape  ' .. debug .getinfo ( level + 1, 'n' ) .name )
+    local  rv  =  {}
+    for  n = 1,999  do
+      local  k, v  =  debug .getlocal (  level + 1, n )
+      if  k == nil  then  break  end
+      --  print ( ('locals_scrape    kv  %s  %s') : format ( k, v ) )
+      rv [ k ]  =  v == nil  and  nil_flag  or  v  end
+    return  rv  end
+
+  assert_no_tail_calls ( level + 1 )
+  local  rv  =  {  env     =  env_scrape    ( level + 1 ),
+                   locals  =  locals_scrape ( level + 1 )  }
+  expand_check ( rv )
+  return  rv  end
 
 
 function  import  ()    ----------------------------------------------  import
-  _G. lush  =  _G .package .loaded .lush
-  local  s  =  'cap  cat  cond  echo  popen  printf  sh  trace'
-  for  k  in  s : gmatch '%S+'  do
-    _G [ k ]  =  _ENV [ k ]  end  end
+  local  s  =  [[  basename  cap  cat  cd  cond  each  echo  expand  export
+    glob  in_list  is  popen  printf  sh  trace  ]]
+  for  k  in  s : gmatch '%S+'  do  _G[k]  =  _ENV[k]  end
+  return  _G .package .loaded .lush  end
 
 
-function  normalize  ( o, k, v )    -------------------------------  normalize
-  assert ( type(o) == 'table'  or  type(o) == 'string' )
-  if  type(o) == 'string'  then  o        =  { o }  end
-  if  k                    then  o [ k ]  =  v      end
+function  is  ( s )    ---------------------------------------------------  is
+  assert ( s : match '^-%w'  or  s : match '^!%s' )
+  return  cond ( normalize ( '[ ' .. s .. ' ]', 2 ) )  end
+
+
+function  normalize  ( o, level, k, v, k2, v2 )    ----------------  normalize
+
+  assert ( type(level) == 'number', type(level) )
+
+  if  type(o) == 'string'  then  o  =  { o }  end
+  assert ( type(o) == 'table' )
+  if  type(o[1]) == 'string'  and  o[1] : match '^-'  then
+    o .ignore  =  true  end
+
+  if  o .info_scrape == nil  then
+    o .info_scrape  =  info_scrape ( level + 1 )  end
+
+  if  k  and  o[k] == nil  then
+    o[k]  =  v
+    if  k2  and  o[k2] == nil  then  o[k2]  =  v2  end  end
+
   return  o  end
 
 
 function  popen  ( o, ... )    ----------------------------------------  popen
-  o  =  normalize ( o, 'popen', true )
-  if  o .readlines == nil  then  o .readlines  =  true  end
-  --  note  the tail call of sh() is required to scrape the correct locals
-  return  sh ( o, ... )  end
+  return  sh ( normalize ( o, 2, 'popen', true, 'readlines', true ), ... )  end
 
 
 function  printf  ( format, ... )    ---------------------------------  printf
@@ -154,22 +390,22 @@ function  quote  ( s )    ---------------------------------------------  quote
 
 function  sh  ( o, ... )    ----------------------------------------------  sh
 
-  o  =  normalize ( o )
+  o  =  normalize ( o, 2 )
 
-  local  command  =  expand_command ( o, 2, ... )
+  o .command  =  expand_command ( o, 2, ... )
 
-  if  o .trace  then  print ( command )  end
+  if  o .trace  then  print ( o .command )  end
 
   local  stdout, success, exit, n
 
   if  o .capture  then
-    local  proc       =  io .popen ( command, 'r' )
-    stdout            =  proc : read 'a'
+    local  proc       =  assert ( io .popen ( o .command, 'r' ) )
+    stdout            =  assert ( proc : read 'a' )
     success, exit, n  =  proc : close()
     if  o .rstrip == true  then  stdout  =  stdout : match '^(.-)\n?$'  end
 
   elseif  o .popen  then
-    local  proc       =  assert ( io .popen ( command, 'r' ) )
+    local  proc       =  assert ( io .popen ( o .command, 'r' ) )
     local  next_line  =  proc : lines ()
     function  wrap  ()
       local  rv  =  next_line()
@@ -177,30 +413,35 @@ function  sh  ( o, ... )    ----------------------------------------------  sh
       return  rv  end
     return  wrap
 
+  elseif  o .stdin  then
+    local  proc  =  assert ( io .popen ( o .command, 'w' ) )
+    assert ( proc : write ( o .stdin ) )
+    success, exit, n  =  proc : close()
+
   else
-    success, exit, n  =  os .execute ( command )  end
+    success, exit, n  =  os .execute ( o .command )  end
 
   repeat  --  only once
     if  success == true  and  exit == 'exit'  and  n == 0  then  break  end
-    if  o .ignore  or  o[1] : match '^-'  then  break  end
+    if  o .ignore  then  break  end
     print()
     printf ( 'sh  error\n' )
-    printf ( '  command  %s\n', command )
+    printf ( '  command  %s\n', o .command )
     printf ( '  exit     %s  %s\n', exit, n )
     print()
     error ( ('sh error %s %s') : format ( exit, n ) )
-    until  false
+    until  true
 
   if  o .capture  then  return  stdout,  success, exit, n
   else                  return  success, exit, n  end  end
 
 
 function  trace  ( o, ... )    ----------------------------------------  trace
-  --  note  the tail call of sh() is required to scrape the correct locals
-  return  sh ( normalize ( o, 'trace', true ), ... )  end
+  return  sh ( normalize ( o, 2, 'trace', true ), ... )  end
 
 
-do    -----------------------------------------  scrape _ENV into shell_module
+do    --------------------------------------------------  module encapsulation
+  --  scrape _ENV into shell_module
   local  shell_module  =  {}
   for  k, v  in  pairs ( _ENV )  do  shell_module [ k ]  =  v  end
   return  shell_module  end
