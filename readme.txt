@@ -115,7 +115,7 @@ cd ( path, trace )
 cond ( command, ... )
 
   A convenient way to call sh() with ignore = true.
-  Use with if to test if a program exited nnormally.
+  Use with if to test if a program exited normally.
   See sh() for details.
   Example usage:  if cond '[ -f $path ]' then end
 
