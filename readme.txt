@@ -141,11 +141,14 @@ echo ( s )
   (Note: echo()'s expansion method, and therefore its output, is
   likely to change in the future.)
 
+expand ( s )
 expand ( s, level, ... )
 
   Expand string s against locals and _ENV from level on the call
   stack.  Return the expanded string.
+  level is optional and defaults to 1 (the function that called expand())
   The vararg ... is unused at present.
+  Example usage:  local  path  =  expand '$HOME/foo'
 
 expand_command ( command, level, ... ).
 
