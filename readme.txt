@@ -33,9 +33,9 @@ to GNU Make).  This differs from POSIX Shell where string expansion
 occurs immediately (when a string is assigned a value).  Consider the
 following Lush example:
 
-local  path  =  '$HOME/foo'    -- path now has the value '$HOME/foo'
-sh 'mkdir $path'               -- the sh() function will expand '$path'
-                               -- prior to executing mkdir
+local  path  =  '$HOME/foo'    -- path now has the value '$HOME/foo'.
+sh 'mkdir $path'               -- The sh() function will expand '$path'
+                               --   prior to executing mkdir.
 
 If needed, you can manually force immediate expansion as follows:
 
