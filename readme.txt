@@ -5,6 +5,15 @@ Lush is a pure Lua module for writing POSIX shell script style
 programs in Lua.  (A small number of Lush functions depend on
 luaposix.)
 
+The primary features of Lush are:
+
+  automatic shell-style string and variable expansion
+
+  the lush.sh() function for creating and interacting with
+  subprocesses
+
+  convenience wrappers around the sh() function
+
 Lush is currently experimential.  This means future versions of Lush
 may include breaking changes.
 
@@ -24,23 +33,28 @@ to GNU Make).  This differs from POSIX Shell where string expansion
 occurs immediately (when a string is assigned a value).  Consider the
 following Lush example:
 
-local  path  =  '$HOME/foo'    -- path is now '$HOME/foo'
+local  path  =  '$HOME/foo'    -- path now has the value '$HOME/foo'
 sh 'mkdir $path'               -- the sh() function will expand '$path'
+                               -- prior to executing mkdir
+
+If needed, you can manually force immediate expansion as follows:
+
+local  path  =  expand '$HOME/foo'
 
 Expansion will look for each variable name in the following three
 locations:
 
-First, in the local variable of the "parent function".
+First, in the local variables of the "parent function".
 Second, in the _ENV of the "parent function".
 Finally, in the environment variables of the process.
 
-In the above example, the "parent function" is the function that calls
-sh().
+The "parent function" is the function that calls sh() or expand().
 
-During expansion, if a value is found in a local or in _ENV, that
-value will itself be expanded.  If a value is found in the
-environment, it will not be expanded, as it is assumed that
-environment variables are already fully expanded.
+During expansion, if a name matches a local variable or a key in _ENV,
+the corresponding value will itself be expanded.  If a name matches an
+environment variable, then the value of that environment variable will
+not be expanded.  (It is assumed that environment variables are
+already fully expanded.)
 
 Internally, string expansion is performed via the following three
 functions:
@@ -48,6 +62,9 @@ functions:
 expand ( v, level, ... )
 expand_command ( o, level, ... )
 expand_template ( s, level, ... )
+
+In most cases, you do not need to manually call these functions as
+sh() and the other functions in Lush will handle expansion for you.
 
 level specfies the level on the stack where the expand functions will
 look for local variables and for _ENV.  This is similar to the Lua
@@ -67,10 +84,10 @@ happens once.
 Note that an error will be raised if you tail call a function that
 expands one or more of its arguments.  A tail call removes the parent
 function from the stack.  This makes it impossible for expand() to
-find locals and _ENV from parent function.  (Thankfully, Lua does
-remember that a tail call occurred.  Therefore, expand() can at least
-detect the tail call and raise an error.  Otherwise, the tail call
-would silently cause an incorrect expansion.)
+find the required locals and _ENV.  (Thankfully, Lua does remember
+that a tail call occurred.  Therefore, expand() can at least detect
+the tail call and raise an error.  Otherwise, the tail call would
+silently cause an incorrect expansion.)
 
 
 ----  FUNCTIONS  ----
@@ -83,8 +100,8 @@ cap ( command, ... )
 
   A convenient way to call sh() with both
     .capture = true and .rstrip = true.
-  In other words, run command and capture its output.  Return the
-    output as a string.  See sh() for details.
+  In other words, expand command, run the expanded command and capture
+  its output.  Return the output as a string.  See sh() for details.
   Example usage:  local  ls  =  cap 'ls $path'
 
 cat ( path )
@@ -138,16 +155,16 @@ echo ( s )
 
   Expand s as a template and print the expansion.  See
   expand_template() for details.
-  (Note: echo()'s expansion method, and therefore its output, is
-  likely to change in the future.)
+  (Note: In the future, echo()'s implementation may change such that
+  expansions will not be quoted.)
 
 expand ( s )
 expand ( s, level, ... )
 
   Expand string s against locals and _ENV from level on the call
   stack.  Return the expanded string.
-  level is optional and defaults to 1 (the function that called expand())
-  The vararg ... is unused at present.
+  level is optional and defaults to 1 (the function that called expand()).
+  The vararg ... is not used at present.
   Example usage:  local  path  =  expand '$HOME/foo'
 
 expand_command ( command, level, ... ).
@@ -156,7 +173,7 @@ expand_command ( command, level, ... ).
   Return the expanded command as single string.
 
   Note: Typically, you do not directly call expand_command().
-  Typically, expand_command() is called for you by sh().  However,
+  Instead, expand_command() is called for you by sh().  However,
   understaing expand_command() will help you reason about command
   expansion.
 
@@ -185,8 +202,8 @@ expand_template ( template, info )
   follows:
 
   1) If a string is expanded inside a template, the string will be
-  quoted/escaped (only when needed).  [In other words, the child
-  process will receive the string as a single argument.]
+  quoted/escaped, if needed, so that the child process will receive
+  the entire string as a single argument.
 
   2) If a table is expanded inside a template, the table will be
   interpreted as a list.  Each elemment of the list will be expanded
@@ -209,8 +226,8 @@ expand_template ( template, info )
 
 export ( s )
 
-  export a value to the environment.  s is a string of the form
-  'name=value'.
+  export a value to the environment.
+  s is a string of the form 'name=value'.
   Example usage:  export 'foo=$bar'
   export() depends on the posix.stdlib module.
 
@@ -238,9 +255,8 @@ import ()
 
 is ( s )
 
-  Access the POSIX shell's builtin test command.  This can be used to
-  determine if a file or directory exists, and for other purposes.
-
+  Access the POSIX shell's builtin test command.  This can be used,
+  for example, to determine if a file or directory exists.
   Example usage: if is '-f $path' then end
 
 popen ( command, ... )
@@ -259,26 +275,29 @@ quote ( s )
 
   Quote string s, allowing it to be passed to a subprocess as a single
   command line argument to that subprocess.  You may never need to
-  quote, as sh() automatically quotes all expansions for you.
+  call quote() directly,, as sh() automatically quotes all expansions
+  for you.
 
 sh ( command, ... )
 sh { command, [arg ... ] [<option>=true ... ] }
 
   Execute command as a subprocess.
 
-  Command can be a string or a list.
+  command can be a string or a list.
 
-  Command will be turned into a single string by expand_command()
+  command will be turned into a single string by expand_command()
 
-  The command will be executed via os.execute() or io.popen().
+  The expanded command will then be executed via os.execute(), or
+  when approriate, via io.popen().
 
   At present, the vararg ... is not used.  This may change in the
-  future.  Instead of varag, you can call sh with a table:
-    sh { command, arg, arg, arg }
+  future.  Instead of varag, you can call sh() with a table:
+    sh { command, arg1, arg2, arg3 }
 
   If command is a table, the following six keys are optional:
 
-  If .capture == true, capture and return the commands output.
+  If .capture == true, then sh() will capture the child process's
+    output and return it as a string.
   If .capture == true and .rstrip == true, then remove the trailing
     newline character from the command's output before returning the
     command's output.
@@ -295,10 +314,10 @@ sh { command, [arg ... ] [<option>=true ... ] }
   exits with a non-zero exit status.
 
   By default sh() will return the values returned by os .execute().
-  Meaning, sh() will one of:
-    true
-    nil, 'exit',   exit_status
-    nil, 'signal', signal_number
+  Meaning, sh() will return one of:
+    true, 'exit',   exit_status
+    nil,  'exit',   exit_status
+    nil,  'signal', signal_number
 
 trace ( command, ... )
 
@@ -308,13 +327,15 @@ trace ( command, ... )
 ----  COMPATIBILITY  ----
 
 Lush is designed to work with Lua 5.3 and may also work with Lua 5.2.
-Lush expects os .execute() to call a POSIX shell.
+Lush expects os .execute() to call a POSIX shell (that is, a shell
+that will interpret quoted arguments in the same way that a POSIX
+shell does).
 
 As documented above, several of Lush's functions depend on the
 luaposix module.
 
 Several parts of Lush would need to be modified to work with Lua 5.1.
-On Lua 5.1, the results of os .execete() may vary by system.  This
+In Lua 5.1, the results of os .execete() may vary by system.  This
 could break Lush's ability to detect whether or not commands executed
 successfully.  In Lua 5.1, file:close() does not return the exit
 status of a process that was created by io.popen.
