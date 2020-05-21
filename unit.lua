@@ -2,7 +2,7 @@
 
 --  Copyright (c) 2019 Parke Bostrom, parke.nexus at gmail.com
 --  See copyright notice in lush.lua.
---  Version 0.0.20200210
+--  Version 0.0.20200521
 
 
 lush  =  require  'lush' .import()
@@ -36,6 +36,7 @@ f  =  ''
 g  =  false
 h  =  { '$a', '$g', '$a', '$a$g$a' }
 i  =  'a  b  c'
+j  =  5
 
 local  ex  =  lush .expand
 local  ec  =  lush .expand_command
@@ -59,6 +60,7 @@ cmp(  cm ( { 'echo a b', 'c', 'd  e' }, 'f', 'g', 'h  i' ),
 cmp(  ex  '$$a',     '$$a'       )
 cmp(  ex  '$g',      false       )
 cmp(  ex  '$a$g$a',  'bb'        )
+cmp(  ex  '$j',      '5'         )
 cmp(  ec  '$h',      'b  b  bb'  )
 cmp(  ec  ( h ),     'b  b  bb'  )
 cmp(  ec  '$a$g$a',  'bb'        )
@@ -76,6 +78,8 @@ cmp(  fn(  trace  '-true'     ),  'true  exit  0'       )
 cmp(  fn(  trace  '-false'    ),  'nil  exit  1'        )
 cmp(  fn(  trace  '-/nofile'  ),  'nil  exit  127'      )
 
+cmp(  fn(  cap 'echo foo\necho bar' ), "'foo\nbar'  true  exit  0" )
+
 --[[  20200207  expand_command now rejects varags
 cmp(  fn(  cap ( { 'echo  a  b', 'c', 'd  e' }, 'f', 'g', 'h  i' )  ),
       "'a b c d  e f g h  i'  true  exit  0" )
@@ -90,6 +94,7 @@ cmp(  fn(  is '-d /tmp'  ),    'true  exit  0'  )
 cmp(  fn(  is '-f /tmp'  ),    'nil  exit  1'  )
 cmp(  fn(  is '! -d /tmp'  ),  'nil  exit  1'  )
 cmp(  fn(  is '! -f /tmp'  ),  'true  exit  0'  )
+
 
 
 function  test_function  ()
@@ -129,7 +134,6 @@ cmp(  expand  '$ace',         '$bar'  )
 cmp(  cap     'echo  $ace',   '$bar'  )
 cmp(  cap     'echo  $$ace',  '$bar'  )
 
-
 assert ( not is '-e /tmp/foo' )
 cat { '/tmp/foo', write='bar' }
 cmp(       cat '/tmp/foo'   , 'bar' )
@@ -138,6 +142,22 @@ cat { '/tmp/foo', append=' baz' }
 cmp(       cat '/tmp/foo'   , 'bar baz' )
 cmp(  fn ( cat '/tmp/foo' ) , "'bar baz'" )
 sh 'rm /tmp/foo'
+cmp(  cat { '/tmp/foo', ignore=true }, nil )
+
+function  a  ()  return  expand  ''  end
+function  b  ()  return  expand  '', nil  end
+function  c  ()  return  b()  end
+cmp(  (pcall(a)),  false  )
+cmp(  (pcall(b)),  true   )
+cmp(  (pcall(c)),  true   )
+
+cmp(  has  (  'a b c',        'b'  ),  true   )
+cmp(  has  (  'a b c',        'f'  ),  false  )
+cmp(  has  (  {'a','b','c'},  'b'  ),  true   )
+cmp(  has  (  {'a','b','c'},  'f'  ),  false  )
+
+
+cmp(  table .concat ( extend  ( {'a'}, {'b'}, {'c','d','e'} ) ), 'abcde' )
 
 
 print  '----  end unit tests  ----'

@@ -50,11 +50,11 @@ Finally, in the environment variables of the process.
 
 The "parent function" is the function that calls sh() or expand().
 
-During expansion, if a name matches a local variable or a key in _ENV,
-the corresponding value will itself be expanded.  If a name matches an
-environment variable, then the value of that environment variable will
-not be expanded.  (It is assumed that environment variables are
-already fully expanded.)
+During expansion, if a name matches either a local variable or a key
+in _ENV, then the corresponding value will itself be expanded.  If a
+name matches an environment variable, then the value of that
+environment variable will not be expanded.  (It is assumed that
+environment variables are already fully expanded.)
 
 Internally, string expansion is performed via the following three
 functions:
@@ -77,17 +77,18 @@ level defaults to 1, signifying the function that called expand().
 repeatedly on the same string without ill effect.  In other words:
 expand ( s ) == expand ( expand ( s ) ).
 
-When Lush executes a subprocess, '$$' will be collapsed to '$'
+When lush.sh() executes a subprocess, '$$' will be collapsed to '$'
 immediately prior to execution of the command.  This collapse only
-happens once.
+happens once, and it happens automatically.
 
 Note that an error will be raised if you tail call a function that
 expands one or more of its arguments.  A tail call removes the parent
 function from the stack.  This makes it impossible for expand() to
 find the required locals and _ENV.  (Thankfully, Lua does remember
 that a tail call occurred.  Therefore, expand() can at least detect
-the tail call and raise an error.  Otherwise, the tail call would
-silently cause an incorrect expansion.)
+that a tail call occured and consequently raise an error.  If tail
+calls were undetectable, the tail call would silently cause an
+incorrect expansion.)
 
 
 ----  FUNCTIONS  ----
@@ -109,20 +110,25 @@ cat ( path )
   Expand path, open the file at path, read the file's contents, and
   return the contents as a string.
 
-cat { read_keys=path }
+cat { path, append=text }
 
-  Expand path, open the file at path, read each line, store the lines
-  as keys in a table.  Return the table.
+  Expand path, open the file at path, append text to the end of the
+  file, close the file.  Text can be a string or list of strings.
+
+cat { path, ignore=true }
+
+  Same as cat(path), except will return nil if the file does not
+  exist.
 
 cat { path, write=text }
 
   Expand path, open the file at path, write text to the file, close
   the file.  Text can be a string or a list of strings.
 
-cat { path, append=text }
+cat { read_keys=path }
 
-  Expand path, open the file at path, append text to the end of the
-  file, close the file.  Text can be a string or list of strings.
+  Expand path, open the file at path, read each line, store the lines
+  as keys in a table.  Return the table.
 
 cd ( path, trace )
 
@@ -241,11 +247,18 @@ glob ( pattern )
   Exapmle usage:  for path in glob '/tmp/*.txt' do end
   Depends on posix.glob.
 
+has  ( t, s )
+
+  If t is a string: has() iterates over patterns in t that match
+  '%S+'.  If one of these matches equals s, then has() returns true.
+  Otherwise, has() returns false.
+
+  If t is a table: has() returns true if s equals the value of any
+  field in t.  Otherwise, has() returns false.
+
 in_list ( k, s )
 
-  Returns true if string k is one of the space delimited words in
-  string s.
-  Example usage:  if in_list ( 'foo', 'fee fi fo fum' ) then end
+  in_list() is deprecated.  Please use has() instead.
 
 import ()
 

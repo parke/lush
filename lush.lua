@@ -4,9 +4,6 @@
 --  See the copyright notice at the end of this file.
 
 
---  20200206  todo  unit testing of falses, both in strings and commands
-
-
 do    --------------------------------------------------  module encapsulation
   --  install a new _ENV that can "see through" to _G
   local  _G, mt  =  _G, {}
@@ -14,7 +11,7 @@ do    --------------------------------------------------  module encapsulation
   _ENV  =  setmetatable ( {}, mt )  end
 
 
-version  =  '0.0.20200211'
+version  =  '0.0.20200521'
 
 
 function  assert_no_varargs  ( ... )    -------------------  assert_no_varargs
@@ -31,6 +28,13 @@ function  cap  ( o, ... )    --------------------------------------------  cap
 
 
 function  cat  ( o, ... )    --------------------------------------------  cat
+
+  --  usage:  cat ( path )                 --  read file, return as string
+  --          cat { path, append=text }    --  append text to file
+  --          cat { path, ignore=true }    --  return nil on file not found
+  --          cat { path, write=text }     --  write text to file
+  --          cat { path, update=text }    --  on diff, write text to file
+  --          cat { read_keys=path }       --  read lines as table keys
 
   assert_no_varargs ( ... )
 
@@ -51,6 +55,18 @@ function  cat  ( o, ... )    --------------------------------------------  cat
     --  return   cat_write ( o, expand ( o .append, 3 ), 'ab' )  end
     return  open_write ( path, 'ab', o .append )  end
 
+  local function  plain  ( path, o )
+    --  todo?  remove the asserts, return an error code instead?
+    --  or, alternatively, ignore errors if path starts with '-'  ??
+    local  f, err  =  io .open ( path, 'r' )
+    if  f  then
+      local  rv  =  assert ( f : read 'a' )
+      f : close()  ;  return  rv
+    elseif  ( o  and  o .ignore  and
+              err == path ..': No such file or directory' )  then
+      return  nil
+    else  error ( err )  end  end
+
   local function  read_keys  ( path, o )
     local  f     =  assert ( io .open ( path, 'rb' ) )
     local  rv    =  {}
@@ -62,22 +78,26 @@ function  cat  ( o, ... )    --------------------------------------------  cat
     --  return   cat_write ( o, expand ( o .stdout, 3 ), 'wb' )  end
     return  open_write ( path, 'wb', o .write )  end
 
+  local function  update  ( path, o )
+    local  f  =  io .open ( path, 'wb' )
+    if  f  then
+      local  actual  =  f : read 'a'  ;  f : close()
+      if  actual == o.update  then  return  end  end
+    open_write ( path, 'wb', o.update )  end
+
   if  type ( o ) == 'string'  then
-    --  todo?  remove the asserts, return an error code instead?
-    --  or, alternatively, ignore errors if path starts with '-'  ??
     local  path  =  expand ( o, 2 )
-    local  f     =  assert ( io .open ( path, 'r' ) )
-    local  rv    =  assert ( f : read 'a' )
-    f : close()
-    return  rv  end
+    return  plain ( path )  end
 
   if  type ( o ) == 'table'  then
-    assert ( # o == 1, 'cat  error  # o ~= 1' )
-    assert ( type(o[1]) == 'string' )
+    assert ( # o == 1, 'cat  error  # o ~= 1  ' .. # o )
+    assert ( type(o[1]) == 'string', 'cat  bad type  ' .. type(o[1]) )
     local  path  =  expand ( o[1], 2 )
     if  o .append     then  return  append    ( path, o )  end
     if  o .read_keys  then  return  read_keys ( path, o )  end
-    if  o .write      then  return  write     ( path, o )  end  end
+    if  o .write      then  return  write     ( path, o )  end
+    if  o .update     then  return  update    ( path, o )  end
+    if  o .ignore     then  return  plain     ( path, o )  end end
 
   error  'cat failed'  end
 
@@ -120,7 +140,7 @@ function  each  ( t )    -----------------------------------------------  each
 function  echo  ( s, ... )    ------------------------------------------  echo
   --  temporary kludge?  perhaps echo should have custom expansion?
   if  s == nil  then  print()  ;  return  end
-  local  command  =  expand_command ( s , 2, ... )
+  local  command  =  collapse ( expand_command ( s , 2, ... ) )
   return  print ( command )  end
 
 
@@ -188,6 +208,7 @@ function  expand_table  ( t, o )    ----------------------------  expand_table
 function  expand_value  ( v, o )    ----------------------------  expand_value
   expand_check ( o )
   if  type(v) == 'function'  then  v  =  v()  end
+  if  type(v) == 'number'    then  return  ( tostring ( v )           )  end
   if  type(v) == 'string'    then  return  ( expand_string   ( v, o ) )  end
   if  type(v) == 'table'     then  return  ( expand_table    ( v, o ) )  end
   if  v       == false       then  return  false  end
@@ -269,6 +290,15 @@ function  export  ( s )    -------------------------------------------  export
   stdlib .setenv ( name, value )  end
 
 
+function  extend  ( t, ... )    --------------------------------------  extend
+  --  usage:  extend ( {'a'}, {'b'}, {'c'} )
+  for  n, arg  in  ipairs { ... }  do
+    if  type(arg) == 'table'  then
+      table .move ( arg, 1, #arg, #t+1, t )
+    else  error ( 'extend  bad type  ' .. type(arg) )  end  end
+  return  t  end
+
+
 function  getcwd  ()    ----------------------------------------------  getcwd
   local  unistd  =  require 'posix.unistd'
   return  unistd .getcwd()  end
@@ -284,16 +314,36 @@ function  glob  ( s )    -----------------------------------------------  glob
   return  glob_next  end
 
 
-function  in_list  ( k, s )    --------------------------------------  in_list
-  for  s  in  s : gmatch '%S+'  do
-    if  s == k  then  return  true  end  end
+function  has  ( t, v )    ----------------------------------------------  has
+  --  usage:  if has ( 'a b c',       'a' )  then  end
+  --  usage:  if has ( {'a','b','c'}, 'a' )  then  end
+  if  type(t) == 'string'  then
+    for  e  in  t : gmatch '%S+'  do  if  e == v  then  return  true  end  end
+    return  false  end
+  if  type(t) == 'table'  then
+    for  k, e  in  pairs ( t )  do  if  e == v  then  return  true  end  end
+    return  false  end
+  error ( 'lush.has()  bad type  ' .. type(t) )  end
+
+
+function  in_list  ( k, v )    --------------------------------------  in_list
+  error ( 'in_list() is deprecated' )
+  if  type(v) == 'string'  then
+    for  s  in  v : gmatch '%S+'  do
+      if  s == k  then  return  true  end  end
+  elseif  type(v) == 'table'  then
+    for  n, e  in  pairs ( v )  do
+      if  e == k  then  return  true  end  end
+  else  error ( 'bad type  ' .. type(v) )  end
   return  false  end
 
 
 function  info_scrape  ( level )    -----------------------------  info_scrape
 
   function  assert_no_tail_calls  ( level )
-    for  n = 1, level+1  do
+    --  20200320
+    --  for  n = 1, level+1  do
+    for  n = 1, level  do
       local  info  =  debug .getinfo ( n, 't' )
       assert ( info .istailcall == false, 'detected problematic tail call' )
       end  end
@@ -344,7 +394,7 @@ function  info_scrape  ( level )    -----------------------------  info_scrape
 
 function  import  ()    ----------------------------------------------  import
   local  s  =  [[  basename  cap  cat  cd  cond  each  echo  expand  export
-    glob  in_list  is  popen  printf  sh  trace  ]]
+    extend  glob  has  is  popen  printf  read  sh  split  trace  ]]
   for  k  in  s : gmatch '%S+'  do  _G[k]  =  _ENV[k]  end
   return  _G .package .loaded .lush  end
 
@@ -386,6 +436,15 @@ function  quote  ( s )    ---------------------------------------------  quote
   if  s == ''  then  return  "''"  end
   return  s : find '[^-%w_./:]'  and
     ( "'" .. s : gsub ( "'", "'\''" ) .. "'" )  or  s  end
+
+
+function  read  ( path )    --------------------------------------------  read
+  local  f  =  io .open ( path )
+  local function  iter  ()
+    local  rv  =  f : read()
+    if  rv == nil then  f : close()  end
+    return  rv  end
+  return  iter, f, nil  end
 
 
 function  sh  ( o, ... )    ----------------------------------------------  sh
@@ -436,6 +495,14 @@ function  sh  ( o, ... )    ----------------------------------------------  sh
   else                  return  success, exit, n  end  end
 
 
+function  split  ( v )    ---------------------------------------------  split
+  if  type ( v ) == 'string'  then
+    local  rv  =  {}
+    for  s  in  v : gmatch '%S+'  do  table .insert ( rv, s )  end
+    return  rv  end
+  return  v  end
+
+
 function  trace  ( o, ... )    ----------------------------------------  trace
   return  sh ( normalize ( o, 2, 'trace', true ), ... )  end
 
@@ -449,7 +516,7 @@ do    --------------------------------------------------  module encapsulation
 
 
 
---[[-------------------------------------------------------------------------
+--[[--------------------------------------------------------------------------
 
 MIT License
 
