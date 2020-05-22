@@ -17,7 +17,7 @@ The primary features of Lush are:
 Lush is currently experimential.  This means future versions of Lush
 may include breaking changes.
 
-[Version 20200521]
+[readme.txt version 20200522]
 
 
 ----  STRING EXPANSION  ----
@@ -355,7 +355,7 @@ status of a process that was created by io.popen.
 
 Regarding using Lush on Windwos, or on other systems with a non-POSIX
 shell, this may work if the quote function is adjusted to properly
-quote each argument.  Other unknown adjustments migth also be
+quote each argument.  Other unknown adjustments might also be
 required.
 
 

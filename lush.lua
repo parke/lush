@@ -11,7 +11,7 @@ do    --------------------------------------------------  module encapsulation
   _ENV  =  setmetatable ( {}, mt )  end
 
 
-version  =  '0.0.20200521'
+version  =  '0.0.20200522'
 
 
 function  assert_no_varargs  ( ... )    -------------------  assert_no_varargs
@@ -520,7 +520,7 @@ do    --------------------------------------------------  module encapsulation
 
 MIT License
 
-Copyright (c) 2019 Parke Bostrom, parke.nexus at gmail.com
+Copyright (c) 2020 Parke Bostrom, parke.nexus at gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
