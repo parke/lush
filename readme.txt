@@ -275,14 +275,17 @@ is ( s )
 popen ( command, ... )
 
   A convenient way to call sh() with
-    .popen = true and .readlines = true.
+    .popen = true and .iter_lines = true.
   Use with for to iterate over the lines of output of a command.
   See sh() for details.
   Example usage:  for path in popen 'ls' do end
 
 printf ( format, ... )
 
-  io .write ( format : format ( ... ) )
+  print ( format : format ( ... ) )
+
+  Note:  Unlike C's printf(), Lush's printf() appends a newline
+  character.  To omit the newline, use writef() instead.
 
 quote ( s )
 
@@ -316,7 +319,7 @@ sh { command, [arg ... ] [<option>=true ... ] }
     command's output.
   If .ignore == true, ignore the exit code of the command.
   If .popen == true, return the result of io.popen().
-  If .popen == true and .readlines == true, then return an iterator
+  If .popen == true and .iter_lines == true, then return an iterator
     over the lines of command's output.
   If .trace == true, print the command before executing it.
 
@@ -335,6 +338,10 @@ sh { command, [arg ... ] [<option>=true ... ] }
 trace ( command, ... )
 
   A convenient way to call sh() with .trace = true.
+
+writef ( format, ... )
+
+  io .write ( format : format ( ... ) )
 
 
 ----  COMPATIBILITY  ----

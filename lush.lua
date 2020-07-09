@@ -11,7 +11,7 @@ do    --------------------------------------------------  module encapsulation
   _ENV  =  setmetatable ( {}, mt )  end
 
 
-version  =  '0.0.20200522'
+version  =  '0.0.20200709'
 
 
 function  assert_no_varargs  ( ... )    -------------------  assert_no_varargs
@@ -394,7 +394,7 @@ function  info_scrape  ( level )    -----------------------------  info_scrape
 
 function  import  ()    ----------------------------------------------  import
   local  s  =  [[  basename  cap  cat  cd  cond  each  echo  expand  export
-    extend  glob  has  is  popen  printf  read  sh  split  trace  ]]
+    extend  glob  has  is  popen  printf  read  sh  split  trace  writef  ]]
   for  k  in  s : gmatch '%S+'  do  _G[k]  =  _ENV[k]  end
   return  _G .package .loaded .lush  end
 
@@ -424,11 +424,13 @@ function  normalize  ( o, level, k, v, k2, v2 )    ----------------  normalize
 
 
 function  popen  ( o, ... )    ----------------------------------------  popen
-  return  sh ( normalize ( o, 2, 'popen', true, 'readlines', true ), ... )  end
+  return  sh ( normalize (
+    o, 2, 'popen', true, 'iter_lines', true ), ... )  end
 
 
 function  printf  ( format, ... )    ---------------------------------  printf
-  io .write ( format : format ( ... ) )  end
+  print ( format : format ( ... ) )  end
+
 
 
 function  quote  ( s )    ---------------------------------------------  quote
@@ -465,12 +467,19 @@ function  sh  ( o, ... )    ----------------------------------------------  sh
 
   elseif  o .popen  then
     local  proc       =  assert ( io .popen ( o .command, 'r' ) )
-    local  next_line  =  proc : lines ()
-    function  wrap  ()
-      local  rv  =  next_line()
-      if  rv == nil  then  assert ( proc : close() )  end
-      return  rv  end
-    return  wrap
+    if  o .iter_lines  then
+      local  command    =  o .command
+      local  ignore     =  o .ignore
+      local  next_line  =  proc : lines ()
+      function  wrap  ()
+        local  rv  =  next_line()
+        if  rv == nil  then
+          local  success, exit, n  =  proc : close()
+          if  success  or  ignore  then  return  end
+          error ( 'sh error  ' .. command )  end
+        return  rv  end
+      return  wrap
+    else  return  proc  end
 
   elseif  o .stdin  then
     local  proc  =  assert ( io .popen ( o .command, 'w' ) )
@@ -505,6 +514,10 @@ function  split  ( v )    ---------------------------------------------  split
 
 function  trace  ( o, ... )    ----------------------------------------  trace
   return  sh ( normalize ( o, 2, 'trace', true ), ... )  end
+
+
+function  writef  ( format, ... )    ---------------------------------  writef
+  io .write ( format : format ( ... ) )  end
 
 
 do    --------------------------------------------------  module encapsulation
