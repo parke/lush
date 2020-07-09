@@ -17,7 +17,7 @@ The primary features of Lush are:
 Lush is currently experimential.  This means future versions of Lush
 may include breaking changes.
 
-[readme.txt version 20200522]
+[readme.txt version 20200709]
 
 
 ----  STRING EXPANSION  ----
