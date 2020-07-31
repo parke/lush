@@ -17,7 +17,7 @@ The primary features of Lush are:
 Lush is currently experimential.  This means future versions of Lush
 may include breaking changes.
 
-[readme.txt version 20200709]
+[readme.txt version 20200731]
 
 
 ----  STRING EXPANSION  ----
@@ -241,10 +241,10 @@ getcwd ()
 
   Return the current working directory.  Depends on posix.unistd.
 
-glob ( pattern )
+glob ( [pattern="*"], flags )
 
-  Use with for to iterate over paths that match pattern.
-  Exapmle usage:  for path in glob '/tmp/*.txt' do end
+  Use with for and each() to iterate over paths that match pattern.
+  Exapmle usage:  for path in each ( glob '/tmp/*.txt' ) do end
   Depends on posix.glob.
 
 has  ( t, s )

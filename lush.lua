@@ -11,7 +11,7 @@ do    --------------------------------------------------  module encapsulation
   _ENV  =  setmetatable ( {}, mt )  end
 
 
-version  =  '0.0.20200709'
+version  =  '0.0.20200731'
 
 
 function  assert_no_varargs  ( ... )    -------------------  assert_no_varargs
@@ -304,14 +304,11 @@ function  getcwd  ()    ----------------------------------------------  getcwd
   return  unistd .getcwd()  end
 
 
-function  glob  ( s )    -----------------------------------------------  glob
+function  glob  ( pattern, flags )    ----------------------------------  glob
   local  glob  =  require  'posix.glob'
-  local  t, k, v  =  glob .glob  ( expand ( s, 2 ), 0 ), nil, nil
-  assert ( type(t) == 'table' )
-  function  glob_next  ()
-    k, v  =  next ( t, k )
-    return  v  end
-  return  glob_next  end
+  if  type(pattern) == 'string'  then
+    return  glob .glob ( pattern, flags or 0 )  end
+  error  'unimplemented'  end
 
 
 function  has  ( t, v )    ----------------------------------------------  has
@@ -429,7 +426,7 @@ function  popen  ( o, ... )    ----------------------------------------  popen
 
 
 function  printf  ( format, ... )    ---------------------------------  printf
-  print ( format : format ( ... ) )  end
+  print ( format and format : format ( ... ) or '' )  end
 
 
 
