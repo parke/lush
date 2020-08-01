@@ -11,7 +11,7 @@ do    --------------------------------------------------  module encapsulation
   _ENV  =  setmetatable ( {}, mt )  end
 
 
-version  =  '0.0.20200731'
+version  =  '0.0.20200801'
 
 
 function  assert_no_varargs  ( ... )    -------------------  assert_no_varargs
@@ -172,29 +172,60 @@ function  expand_key  ( k, o )    --------------------------------  expand_key
   return  ''  end
 
 
+function  expand_raw  ( k, o )    --------------------------------  expand_raw
+  expand_check ( o )
+  local  loc, env  =  o.locals, o.env
+  local  v
+  v  =  loc [ k ]  ;  if  v ~= nil  then  return  v  end
+  v  =  env [ k ]  ;  if  v ~= nil  then  return  v  end
+  --  we should have already gotten a table
+  error  'expand_raw  failed'  end
+
+
 function  expand_string  ( s, o )    --------------------------  expand_string
   expand_check ( o )
   --  print ( 'expand_string  ' .. s )
   assert ( type(s) == 'string' )
-  local  k  =  s : match '^$([%w_]+)$'
+  local  k  =  s : match '^$([%w_]+)$'    --  s is a single expansion
   if  k  then
     local  rv  =  expand_key ( k, o )
     --  print ( 'expand_string', k, rv )
     return  rv end
-  local function  replace  ( all, k, c )
-    if  c == '$'  then  return  all  end
-    local  rv  =  expand_key ( k, o )
+
+  local function  purify  ( rv, k )    --  make sure rv represents a string
     if  rv == false  then  rv  =  ''  end
     if  type(rv) ~= 'string'  then
       print  ''
-      print  'expand_string  failed  bad type in expansion'
-      print  ( '  s   ' .. s )
-      print  ( '  k   ' .. k )
+      print  'expand_string  purify failed  bad type in expansion'
+      --  print  ( '  s   ' .. s )
+      print  ( '  k   ' .. tostring ( k ) )
       print  ( '  rv  ' .. tostring ( rv ) )
       print  ''  end
     assert ( type(rv) == 'string', s .. '  ' .. type(rv) )
     return  rv  end
-  return  ( s : gsub ( '(%$((.)[%w_]*))', replace ) )  end
+
+  local function  expand_purify  ( k, o )
+    return  purify ( expand_key ( k, o ), k )  end
+
+  local function  replace  ( all, a, b, c, d, e )
+    --  $ { foo . bar }
+    --    a bbb c ddd e
+    if  a == '$'  then  return  all  end
+    --  printf ( 'replace  a(%s)  b(%s)  c(%s)  d(%s)  e(%s)', a, b, c, d, e )
+    if  a == '{'  and  c == ''  and  d == ''  and  e == '}'  then
+      return  expand_purify ( b, o )  end
+    if  a == '{'  and  c == '.'  and  # d > 0  and  e == '}'  then
+      --  printf ( 'replace  %s . %s', b, d )
+      local  bv  =  expand_raw ( b, o )
+      assert ( type(bv) == 'table', 'bad type  ' .. type(bv) )
+      --  print ( 'here3', '...', bv, bv[d] )
+      return  purify ( bv [ d ], b .. '.' .. d )  end
+    if  a == ''  then
+      return  expand_purify ( b, o ) .. c .. d .. e  end
+    error  'unexpected'  end
+
+  local  pattern  =  '(%$([${]?)([%w_]+)(%.?)([%w_]*)(}?))'
+  return  ( s : gsub ( pattern, replace ) )  end
 
 
 function  expand_table  ( t, o )    ----------------------------  expand_table
@@ -305,7 +336,7 @@ function  getcwd  ()    ----------------------------------------------  getcwd
 
 
 function  glob  ( pattern, flags )    ----------------------------------  glob
-  local  glob  =  require  'posix.glob'
+  local  glob  =  require 'posix.glob'
   if  type(pattern) == 'string'  then
     return  glob .glob ( pattern, flags or 0 )  end
   error  'unimplemented'  end

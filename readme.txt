@@ -17,7 +17,7 @@ The primary features of Lush are:
 Lush is currently experimential.  This means future versions of Lush
 may include breaking changes.
 
-[readme.txt version 20200731]
+[readme.txt version 20200801]
 
 
 ----  STRING EXPANSION  ----
@@ -40,6 +40,11 @@ sh 'mkdir $path'               -- The sh() function will expand '$path'
 If needed, you can manually force immediate expansion as follows:
 
 local  path  =  expand '$HOME/foo'
+
+There are two other supported forms of expansion:
+
+echo '${HOME}/foo'      --  same as echo '$HOME/foo'
+echo '${t.home}/foo'    --  where t is a table
 
 Expansion will look for each variable name in the following three
 locations:
