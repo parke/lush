@@ -1,8 +1,8 @@
 
 
---  Copyright (c) 2019 Parke Bostrom, parke.nexus at gmail.com
+--  Copyright (c) 2020 Parke Bostrom, parke.nexus at gmail.com
 --  See copyright notice in lush.lua.
---  Version 0.0.20200521
+--  Version 0.0.20200801
 
 
 lush  =  require  'lush' .import()
@@ -156,8 +156,16 @@ cmp(  has  (  'a b c',        'f'  ),  false  )
 cmp(  has  (  {'a','b','c'},  'b'  ),  true   )
 cmp(  has  (  {'a','b','c'},  'f'  ),  false  )
 
-
 cmp(  table .concat ( extend  ( {'a'}, {'b'}, {'c','d','e'} ) ), 'abcde' )
+
+a  =  'b'
+c  =  { d = 'e' }
+cmp(  expand '$a',      'b'    )
+cmp(  expand '$a.f',    'b.f'  )
+cmp(  expand '${a}',    'b'    )
+cmp(  expand '${a}_f',  'b_f'  )
+cmp(  expand '${c.d}',  'e'    )
+cmp(  expand '$a.d',    'b.d'  )
 
 
 print  '----  end unit tests  ----'
