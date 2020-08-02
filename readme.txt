@@ -17,7 +17,7 @@ The primary features of Lush are:
 Lush is currently experimential.  This means future versions of Lush
 may include breaking changes.
 
-[readme.txt version 20200801]
+[readme.txt version 20200802]
 
 
 ----  STRING EXPANSION  ----
@@ -86,12 +86,18 @@ When lush.sh() executes a subprocess, '$$' will be collapsed to '$'
 immediately prior to execution of the command.  This collapse only
 happens once, and it happens automatically.
 
+The value of each environment variable is assumed to be fully
+expanded.  Consequently, when an environment variable is referenced
+during an expansion, all '$' characters in the value of the
+environment variable will be replaced with '$$' to prevent
+re-expansion of an already fully expanded value.
+
 Note that an error will be raised if you tail call a function that
 expands one or more of its arguments.  A tail call removes the parent
 function from the stack.  This makes it impossible for expand() to
 find the required locals and _ENV.  (Thankfully, Lua does remember
-that a tail call occurred.  Therefore, expand() can at least detect
-that a tail call occured and consequently raise an error.  If tail
+*that* a tail call occurred.  Therefore, expand() can at least detect
+the a tail call occured and appropirately raise an error.  If tail
 calls were undetectable, the tail call would silently cause an
 incorrect expansion.)
 
@@ -196,7 +202,7 @@ expand_command ( command, level, ... ).
   All other values in the list will be expanded by expand and quoted
   as separate arguments.
 
-expand_template ( template, info )
+expand_template ( info, template )
 
   Note: Typically, you do not directly call expand_template().
   Typically, expand_command() will call expand_teplate().  However,
@@ -204,7 +210,11 @@ expand_template ( template, info )
   expansion.
 
   template is a string.
-  info contains two tables:  The _ENV and a table of scraped locals.
+
+  info is a table that contains two tables that are used during
+  variable lookup:
+     info .env     is _ENV
+     info .locals  contains the scraped local variables
 
   expand_template() will expand the template against the variables
   contained in info.
@@ -231,15 +241,21 @@ expand_template ( template, info )
   conflict with the automatically generated quotes.
 
   Example usage:
-  local  b  =  'B'
-  local  c  =  'C C'
-  expand_template 'a $b $c'  --  will return "a B 'C C'"
+  --  In actual usage, info is generated for you by the function that
+  --  calls expand_template().  For illustrative purposes only, we
+  --  manually create a stub info table here.
+  local  info  =  {
+    locals     =  { b = 'B', c = 'C C' },
+    env        =  {}  }
+  expand_template ( info, 'a $b $c' )    --  will return "a B 'C C'"
 
 export ( s )
 
   export a value to the environment.
   s is a string of the form 'name=value'.
-  Example usage:  export 'foo=$bar'
+  The value will be fully expanded.
+  Example usage:  export 'foo=$bar'     --  will export bar's expansion
+  Example usage:  export 'foo=$$bar'    --  will export '$bar'
   export() depends on the posix.stdlib module.
 
 getcwd ()

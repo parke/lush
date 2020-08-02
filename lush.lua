@@ -11,7 +11,7 @@ do    --------------------------------------------------  module encapsulation
   _ENV  =  setmetatable ( {}, mt )  end
 
 
-version  =  '0.0.20200801'
+version  =  '0.0.20200802'
 
 
 function  assert_no_varargs  ( ... )    -------------------  assert_no_varargs
@@ -153,95 +153,81 @@ function  expand_check ( o )    --------------------------------  expand_check
   assert ( type(o.locals) == 'table' )  end
 
 
-function  expand_key  ( k, o )    --------------------------------  expand_key
+local  expand_pattern  =    ----------------------------------  expand_pattern
+  --       a            b             c          d             e
+  '(%$' .. '([${]?)' .. '([%w_]+)' .. '(%.?)' .. '([%w_]*)' .. '(}?)' .. ')'
+
+
+function  expand_match  ( o, all, a, b, c, d, e )    -----------  expand_match
+
+  --  match  $ { foo . bar }        $ $ foo
+  --           a bbb c ddd e          a bbb c d e
+
   expand_check ( o )
 
-  --  print ( 'expand_key  ' .. k )
+  local function  lookup ( o, k )
+    local function  protect  ( s )  return  s : gsub ( '%$', '$$' )  end
+    local function  decode  ( v )  if  v == nil_flag  then  return  nil
+                                     else  return  v  end  end
+    local  loc, env, get, v  =  o.locals, o.env, os.getenv, nil
+    v  =  loc [ k ]  ;  if  v ~= nil  then  return  decode(v)   end
+    v  =  env [ k ]  ;  if  v ~= nil  then  return  v           end
+    v  =  get ( k )  ;  if  v ~= nil  then  return  protect(v)  end
+    return  ''  end
 
-  function  decode  ( k, v )
-    if  v == nil_flag  then
-      --  print ( 'expand_key  warning  is nil  ' .. k )
-      end
-    if  v == nil_flag  then  return  nil  else  return  v  end  end
+  if  a == '$'  then  return  all  end
 
-  local  loc, env, get, ev  =  o.locals, o.env, os.getenv, expand_value
-  local  v
-  v  =  loc [ k ]  ;  if  v ~= nil  then  return  ( ev(decode(k,v),o) )  end
-  v  =  env [ k ]  ;  if  v ~= nil  then  return  ( ev(v,o)           )  end
-  v  =  get ( k )  ;  if  v ~= nil  then  return  v                      end
-  return  ''  end
+  if  a == '{'  and  c == ''  and  d == ''  and  e == '}'  then
+    return  expand_value ( o, lookup ( o, b ) )  end
+
+  if  a == '{'  and  c == '.'  and # d > 0  and  e == '}'  then
+    local  bv  =  lookup ( o, b )
+    if  type(bv) == 'table'  then  return  expand_value ( o, bv [ d ] )
+    else  error ( 'bad type  ' .. type(bv) )  end  end
+
+  if  a == ''  then
+    local  v  =  expand_value ( o, lookup ( o, b ) )
+    if  #c + #d + #e == 0  then
+      --  neither c, d nor e exists, so v may be a string or table
+      return  v
+    else    --  c, d or e exists, so v must be a string
+      if  v == false  then  v  =  ''  end
+      assert ( type(v) == 'string' )
+      return   v .. c .. d .. e  end  end
+
+  printf ()
+  printf ( 'expand_match  unexpected' )
+  printf ( '  all(%s  a(%s  b(%s  c(%s  d(%s  e(%s', all, a, b, c, d, e )
+
+  error  'unexpected'  end
 
 
-function  expand_raw  ( k, o )    --------------------------------  expand_raw
+function  expand_string  ( o, s )    --------------------------  expand_string
   expand_check ( o )
-  local  loc, env  =  o.locals, o.env
-  local  v
-  v  =  loc [ k ]  ;  if  v ~= nil  then  return  v  end
-  v  =  env [ k ]  ;  if  v ~= nil  then  return  v  end
-  --  we should have already gotten a table
-  error  'expand_raw  failed'  end
-
-
-function  expand_string  ( s, o )    --------------------------  expand_string
-  expand_check ( o )
-  --  print ( 'expand_string  ' .. s )
   assert ( type(s) == 'string' )
-  local  k  =  s : match '^$([%w_]+)$'    --  s is a single expansion
-  if  k  then
-    local  rv  =  expand_key ( k, o )
-    --  print ( 'expand_string', k, rv )
-    return  rv end
-
-  local function  purify  ( rv, k )    --  make sure rv represents a string
-    if  rv == false  then  rv  =  ''  end
-    if  type(rv) ~= 'string'  then
-      print  ''
-      print  'expand_string  purify failed  bad type in expansion'
-      --  print  ( '  s   ' .. s )
-      print  ( '  k   ' .. tostring ( k ) )
-      print  ( '  rv  ' .. tostring ( rv ) )
-      print  ''  end
-    assert ( type(rv) == 'string', s .. '  ' .. type(rv) )
-    return  rv  end
-
-  local function  expand_purify  ( k, o )
-    return  purify ( expand_key ( k, o ), k )  end
-
+  local  all, a, b, c, d, e  =  s : match ( '^' .. expand_pattern .. '$' )
+  if  all  then  return  expand_match ( o, all, a, b, c, d, e )  end
   local function  replace  ( all, a, b, c, d, e )
-    --  $ { foo . bar }
-    --    a bbb c ddd e
-    if  a == '$'  then  return  all  end
-    --  printf ( 'replace  a(%s)  b(%s)  c(%s)  d(%s)  e(%s)', a, b, c, d, e )
-    if  a == '{'  and  c == ''  and  d == ''  and  e == '}'  then
-      return  expand_purify ( b, o )  end
-    if  a == '{'  and  c == '.'  and  # d > 0  and  e == '}'  then
-      --  printf ( 'replace  %s . %s', b, d )
-      local  bv  =  expand_raw ( b, o )
-      assert ( type(bv) == 'table', 'bad type  ' .. type(bv) )
-      --  print ( 'here3', '...', bv, bv[d] )
-      return  purify ( bv [ d ], b .. '.' .. d )  end
-    if  a == ''  then
-      return  expand_purify ( b, o ) .. c .. d .. e  end
-    error  'unexpected'  end
-
-  local  pattern  =  '(%$([${]?)([%w_]+)(%.?)([%w_]*)(}?))'
-  return  ( s : gsub ( pattern, replace ) )  end
+    local  rv  =  expand_match ( o, all, a, b, c, d, e )
+    if  rv == false  then  rv  =  ''  end
+    return  rv  end
+  return  ( s : gsub ( expand_pattern, replace ) )  end
 
 
-function  expand_table  ( t, o )    ----------------------------  expand_table
+function  expand_table  ( o, t )    ----------------------------  expand_table
   expand_check ( o )
   assert ( type(t) == 'table' )
   local  rv  =  {}
-  for  n, v  in  ipairs ( t )  do  rv[n]  =  expand_value ( v, o )  end
+  for  n, v  in  ipairs ( t )  do  rv[n]  =  expand_value ( o, v )  end
   return  rv  end
 
 
-function  expand_value  ( v, o )    ----------------------------  expand_value
+function  expand_value  ( o, v )    ----------------------------  expand_value
   expand_check ( o )
   if  type(v) == 'function'  then  v  =  v()  end
   if  type(v) == 'number'    then  return  ( tostring ( v )           )  end
-  if  type(v) == 'string'    then  return  ( expand_string   ( v, o ) )  end
-  if  type(v) == 'table'     then  return  ( expand_table    ( v, o ) )  end
+  if  type(v) == 'string'    then  return  ( expand_string   ( o, v ) )  end
+  if  type(v) == 'table'     then  return  ( expand_table    ( o, v ) )  end
   if  v       == false       then  return  false  end
   if  v       == nil         then  return  nil    end
   error ( 'expand  bad type  ' .. type(v) )  end
@@ -252,13 +238,22 @@ function  expand  ( s, level, ... )    -------------------------------  expand
   assert ( type(level) == 'nil'  or  type(level) == 'number', type(level) )
   assert_no_varargs ( ... )
   local  info  =  info_scrape ( ( level or 1 ) + 1 )
-  return  expand_string ( s, info )  end
+  return  expand_string ( info, s )  end
 
 
-function  expand_template  ( s, info )    -------------------  expand_template
+function  expand_template  ( o, s )   -----------------------  expand_template
+
+  --  note  expand_template() builds and returns a command string.
+
+  --  note  expand_template() expands false to the empty string
+  --        expand_template() expands the empty string to a
+  --          quoted empty string
+
+  --  note  inside expand_template(), a string can expand to a table.
+  --        inside expand_string(), such an expansion causes a runtime error.
 
   assert ( type(s) == 'string' )
-  expand_check ( info )
+  expand_check ( o )
 
   local function  command  ( s )  return  s : match '^-?(.*)$'  end
 
@@ -271,16 +266,16 @@ function  expand_template  ( s, info )    -------------------  expand_template
       else  error ( 'bad type  ' .. type(v) )  end  end
     return  table .concat ( rv, '  ' )  end
 
-  local function  replace  ( k, c )
-    if  c == '$'  then  return  k  end
-    local  v  =  expand_key ( k, info )
+  local function  replace  ( all, a, b, c, d, e )
+    if  a == '$'  then  return  all  end
+    local  v  =  expand_match ( o, all, a, b, c, d, e )
     if  v == false           then  return  ''  end
     if  v == nil             then  return  ''  end
     if  type(v) == 'string'  then  return  ( quote   ( v ) )  end
     if  type(v) == 'table'   then  return  ( flatten ( v ) )  end
     error ( ('command  bad type  %s  %s') : format ( k, type(v) ) )  end
 
-  return  ( command(s) : gsub ( '%$((.)[%w_]*)', replace ) )  end
+  return  ( command(s) : gsub ( expand_pattern, replace ) )  end
 
 
 function  expand_command  ( o, level, ... )    ---------------  expand_command
@@ -298,26 +293,22 @@ function  expand_command  ( o, level, ... )    ---------------  expand_command
   local  o  =  normalize ( o, (level or 1 ) + 1 )
 
   if  type(o[1]) == 'string'  then
-    local  first     =  { ( expand_template ( o[1], o .info_scrape ) ) }
+    local  first     =  { ( expand_template ( o .info_scrape, o[1] ) ) }
     local  rest      =  table .move ( o, 2, #o, 1, {} )
-    local  expanded  =  expand_table ( rest, o .info_scrape )
+    local  expanded  =  expand_table ( o .info_scrape, rest )
     local  quoted    =  flatten_and_quote ( expanded, first )
     return  table .concat ( quoted, '  ' )  end
 
-  local  expanded  =  expand_table ( o, o .info_scrape )
+  local  expanded  =  expand_table ( o .info_scrape, o )
   local  quoted    =  flatten_and_quote ( expanded, rv )
   return  table .concat ( quoted, '  ' )  end
 
 
 function  export  ( s )    -------------------------------------------  export
-  --  print ()
-  --  print ( 'export', s )
   local  name, value  =  s : match '^([%w_]+)=(.*)$'
   assert ( name )
-  --  print ( 'export', name, value )
-  value  =  collapse ( expand ( value, 2 ) )
-  --  print ( 'export', name, value )
-  local  stdlib  =  require 'posix.stdlib'
+  value               =  collapse ( expand ( value, 2 ) )
+  local  stdlib       =  require 'posix.stdlib'
   stdlib .setenv ( name, value )  end
 
 
@@ -481,7 +472,7 @@ function  sh  ( o, ... )    ----------------------------------------------  sh
 
   o  =  normalize ( o, 2 )
 
-  o .command  =  expand_command ( o, 2, ... )
+  o .command  =  collapse ( expand_command ( o, 2, ... ) )
 
   if  o .trace  then  print ( o .command )  end
 

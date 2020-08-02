@@ -2,7 +2,7 @@
 
 --  Copyright (c) 2020 Parke Bostrom, parke.nexus at gmail.com
 --  See copyright notice in lush.lua.
---  Version 0.0.20200801
+--  Version 0.0.20200802
 
 
 lush  =  require  'lush' .import()
@@ -130,7 +130,7 @@ bar  =  'cub'
 cmp(  expand  '$ace',         '$$bar'  )
 ace  =  nil
 export  'ace=$$bar'
-cmp(  expand  '$ace',         '$bar'  )
+cmp(  expand  '$ace',         '$$bar'  )
 cmp(  cap     'echo  $ace',   '$bar'  )
 cmp(  cap     'echo  $$ace',  '$bar'  )
 
@@ -166,6 +166,9 @@ cmp(  expand '${a}',    'b'    )
 cmp(  expand '${a}_f',  'b_f'  )
 cmp(  expand '${c.d}',  'e'    )
 cmp(  expand '$a.d',    'b.d'  )
+
+c  =  { d = 'e e e' }
+cmp(  ec 'rm  ${c.d}',  "rm  'e e e'"  )
 
 
 print  '----  end unit tests  ----'
