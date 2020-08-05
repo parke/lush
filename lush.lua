@@ -11,7 +11,7 @@ do    --------------------------------------------------  module encapsulation
   _ENV  =  setmetatable ( {}, mt )  end
 
 
-version  =  '0.0.20200802'
+version  =  '0.0.20200804'
 
 
 function  assert_no_varargs  ( ... )    -------------------  assert_no_varargs
@@ -128,13 +128,24 @@ function  dirname  ( s )    -----------------------------------------  dirname
   return  s : match '^(.*)/'  end
 
 
-function  each  ( t )    -----------------------------------------------  each
+function  each  ( t, i, j )    -----------------------------------------  each
   if  type(t) == 'function'  then  t  =  t()  end
   assert ( type(t) == 'table', type(t) )
-  local function  iter  ( st )
-    local  rv  ;  st[2], rv  =  next ( st[1], st[2] )
-    return  rv  end
-  return  iter, {t,nil}, nil  end
+  local function  iter  ( st )    --  st  =  { t, k, v, i, j }
+    local function  iter_next  ( st )    --  st means state
+      st[2], st[3]  =  next ( st[1], st[2] )  end
+    local function  too_low ( st )
+      local  t, k, rv, i, j  =  table .unpack ( st )
+      if  rv == nil  then  return  false  end
+      return  i  and  (  type(k) ~= 'number'  or  k < i  )  end
+    local function  too_high ( st )
+      local  t, k, rv, i, j  =  table .unpack ( st )
+      if  rv == nil  then  return  false  end
+      return  j  and  (  type(k) ~= 'number'  or  k > j  )  end
+    iter_next(st)
+    while  too_low(st)  or  too_high(st)  do  iter_next(st)  end
+    return  st[3]  end
+  return  iter, { [1]=t, [2]=nil, [3]=nil, [4]=i, [5]=j}, nil  end
 
 
 function  echo  ( s, ... )    ------------------------------------------  echo

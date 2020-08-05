@@ -163,10 +163,15 @@ dirname ( path )
   Return path after removing the final '/' and all characters after
   it.
 
-each ( t )
+each ( t [,i [,j]] )
 
   Use with for to loop over each value in a list.
   Example usage:  for n in each { 1, 3, 5 } do end
+
+  Optional arguments i and j can be nil, or any positive integer.
+  If i is a positive integer, each will start by   returinng t[i].
+  If j is a positive integer, each will stop after returning t[j].
+  Example usage:  for n in each ( { 1, 3, 5 }, 2, 2 ) do end
 
 echo ( s )
 

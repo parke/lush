@@ -2,7 +2,7 @@
 
 --  Copyright (c) 2020 Parke Bostrom, parke.nexus at gmail.com
 --  See copyright notice in lush.lua.
---  Version 0.0.20200802
+--  Version 0.0.20200804
 
 
 lush  =  require  'lush' .import()
@@ -169,6 +169,15 @@ cmp(  expand '$a.d',    'b.d'  )
 
 c  =  { d = 'e e e' }
 cmp(  ec 'rm  ${c.d}',  "rm  'e e e'"  )
+
+
+--  test each()
+a  =  { 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h' }
+b  =  {}
+for  s  in  each ( a, 2, 5 )  do  table .insert ( b, s )  end
+c  =  table .concat ( b )
+cmp(  c,  'bcde' )
+
 
 
 print  '----  end unit tests  ----'
