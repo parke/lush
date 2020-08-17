@@ -2,7 +2,7 @@
 
 --  Copyright (c) 2020 Parke Bostrom, parke.nexus at gmail.com
 --  See copyright notice in lush.lua.
---  Version 0.0.20200804
+--  Version 0.0.20200816
 
 
 lush  =  require  'lush' .import()
@@ -15,8 +15,17 @@ function  fn  ( ... )
 
 
 function  cmp  ( actual, expect )
-  if  type(actual) == type(expect)  and
-      actual == expect  then  return  end
+
+  local function  tables_equal  ( a, b )
+    for  k,v in pairs ( a )  do  if  b[k] ~= v  then  return  false  end  end
+    for  k,v in pairs ( b )  do  if  a[k] ~= v  then  return  false  end  end
+    return  true  end
+
+  if  type(actual) == type(expect)  then
+    if  type(actual) == 'table'  and  tables_equal ( actual, expect )  then
+      return  end
+    if  actual == expect  then  return  end  end
+
   local  info  =  debug .getinfo ( 2, 'l' )
   print ()
   print ( 'line      ' .. info .currentline )
@@ -62,7 +71,11 @@ cmp(  ex  '$g',      false       )
 cmp(  ex  '$a$g$a',  'bb'        )
 cmp(  ex  '$j',      '5'         )
 cmp(  ec  '$h',      'b  b  bb'  )
-cmp(  ec  ( h ),     'b  b  bb'  )
+
+--  20200816
+--p(  ec  ( h ),                'b  b  bb'  )
+cmp(  ec  ( expand ( h ) ),     'b  b  bb'  )
+
 cmp(  ec  '$a$g$a',  'bb'        )
 
 cmp(  fn(  sh     '-true'     ),  'true  exit  0'       )
@@ -177,6 +190,17 @@ b  =  {}
 for  s  in  each ( a, 2, 5 )  do  table .insert ( b, s )  end
 c  =  table .concat ( b )
 cmp(  c,  'bcde' )
+
+
+cmp( cap { 'echo a; echo b; echo c', to_list={} }, {'a','b','c'} )
+cmp( cap { 'echo a; echo b; echo c', to_list={} }, {'a','b','c'} )
+
+a  =  'c'
+b  =  'd'
+cmp(  cap { 'echo', '$a' },  '$a'  )
+cmp(  cap ( 'echo', '$a' ),  '$a'  )
+cmp(  cap ( 'echo', '$a $b' ),  '$a $b'  )
+cmp(  cap ( 'echo', '$a  $b' ),  '$a  $b'  )
 
 
 

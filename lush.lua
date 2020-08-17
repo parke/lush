@@ -11,7 +11,7 @@ do    --------------------------------------------------  module encapsulation
   _ENV  =  setmetatable ( {}, mt )  end
 
 
-version  =  '0.0.20200804'
+version  =  '0.0.20200816'
 
 
 function  assert_no_varargs  ( ... )    -------------------  assert_no_varargs
@@ -24,6 +24,10 @@ function  basename  ( path )    ------------------------------------  basename
 
 
 function  cap  ( o, ... )    --------------------------------------------  cap
+
+  --  usage:  cap ( command )
+  --  usage:  cap { command, to_list=table }    --  append lines to to_list
+
   return  sh ( normalize ( o, 2, 'capture', true, 'rstrip', true ), ... )  end
 
 
@@ -244,12 +248,21 @@ function  expand_value  ( o, v )    ----------------------------  expand_value
   error ( 'expand  bad type  ' .. type(v) )  end
 
 
-function  expand  ( s, level, ... )    -------------------------------  expand
-  assert ( type(s) == 'string' )
+function  expand_20200816  ( s, level, ... )    -------------  expand_20200816
+  assert ( type(s) == 'string', 'expand  s  bad type  ' .. type(s) )
   assert ( type(level) == 'nil'  or  type(level) == 'number', type(level) )
   assert_no_varargs ( ... )
   local  info  =  info_scrape ( ( level or 1 ) + 1 )
   return  expand_string ( info, s )  end
+
+
+function  expand  ( v, level, ... )    -------------------------------  expand
+  assert ( type(level) == 'nil'  or  type(level) == 'number', type(level) )
+  assert_no_varargs ( ... )
+  local  info  =  info_scrape ( ( level or 1 ) + 1 )
+  if      type(v) == 'string'  then  return  expand_string ( info, v )
+  elseif  type(v) == 'table'   then  return  expand_table  ( info, v )  end
+  error ( 'expand  bad type  type(v)==' .. type(v) )  end
 
 
 function  expand_template  ( o, s )   -----------------------  expand_template
@@ -291,7 +304,18 @@ function  expand_template  ( o, s )   -----------------------  expand_template
 
 function  expand_command  ( o, level, ... )    ---------------  expand_command
 
-  assert_no_varargs ( ... )
+  --  note  expand command only expands o[1]
+  --        expand command does not expand o[2] ... o[n]
+  --        expand command does not expand varargs
+  --        therefore... consider renaming to prepare_command() ??
+
+  --  20200816  now allowing varags
+  --  assert_no_varargs ( ... )
+
+  local  function  varargs_append ( rv, ... )
+    local  t  =  { ... }
+    for  n = 1, select ( '#', ... )  do  table .insert ( rv, t[n] )  end
+    return  rv  end
 
   local  function  flatten_and_quote  ( v, rv )
     rv  =  rv  or  {}
@@ -304,14 +328,21 @@ function  expand_command  ( o, level, ... )    ---------------  expand_command
   local  o  =  normalize ( o, (level or 1 ) + 1 )
 
   if  type(o[1]) == 'string'  then
+    --  in this case, o[1] is considered to be a template
     local  first     =  { ( expand_template ( o .info_scrape, o[1] ) ) }
     local  rest      =  table .move ( o, 2, #o, 1, {} )
-    local  expanded  =  expand_table ( o .info_scrape, rest )
-    local  quoted    =  flatten_and_quote ( expanded, first )
+    local  rest      =  varargs_append ( rest, ... )
+    --  20200816
+    --cal  expanded  =  expand_table ( o .info_scrape, rest )
+    --cal  quoted    =  flatten_and_quote ( expanded, first )
+    local  quoted    =  flatten_and_quote ( rest, first )
     return  table .concat ( quoted, '  ' )  end
 
-  local  expanded  =  expand_table ( o .info_scrape, o )
-  local  quoted    =  flatten_and_quote ( expanded, rv )
+  --  in this case, o does not contain a template
+  --  20200816
+  --cal  expanded  =  expand_table ( o .info_scrape, o )
+  --cal  quoted    =  flatten_and_quote ( expanded )
+  local  quoted    =  flatten_and_quote ( o )
   return  table .concat ( quoted, '  ' )  end
 
 
@@ -490,10 +521,19 @@ function  sh  ( o, ... )    ----------------------------------------------  sh
   local  stdout, success, exit, n
 
   if  o .capture  then
-    local  proc       =  assert ( io .popen ( o .command, 'r' ) )
-    stdout            =  assert ( proc : read 'a' )
+    local  proc  =  assert ( io .popen ( o .command, 'r' ) )
+
+    if  o .to_list  then
+      assert ( type ( o .to_list ) == 'table' )
+      stdout  =  o .to_list
+      local  line_format  =  o .rstrip == true  and  'l'  or  'L'
+      for  s  in  proc : lines ( line_format )  do
+        table .insert ( stdout, s )  end
+    else
+      stdout  =  assert ( proc : read 'a' )
+      if  o .rstrip == true  then  stdout  =  stdout : match '^(.-)\n?$'  end
+      end
     success, exit, n  =  proc : close()
-    if  o .rstrip == true  then  stdout  =  stdout : match '^(.-)\n?$'  end
 
   elseif  o .popen  then
     local  proc       =  assert ( io .popen ( o .command, 'r' ) )

@@ -17,7 +17,7 @@ The primary features of Lush are:
 Lush is currently experimential.  This means future versions of Lush
 may include breaking changes.
 
-[readme.txt version 20200802]
+[readme.txt version 20200816]
 
 
 ----  STRING EXPANSION  ----
@@ -116,6 +116,12 @@ cap ( command, ... )
   its output.  Return the output as a string.  See sh() for details.
   Example usage:  local  ls  =  cap 'ls $path'
 
+cap { command, to_list={} )
+
+  Capture the lines of stdout to the table to_list.
+  Return to_list.
+  Example usage:  local  t  =  cap { 'echo a; echo b', to_list={} }
+
 cat ( path )
 
   Expand path, open the file at path, read the file's contents, and
@@ -204,8 +210,7 @@ expand_command ( command, level, ... ).
 
   Command can be a table (typically, a list).  If the first value in
   the list is a string, that string is expanded by expand_template().
-  All other values in the list will be expanded by expand and quoted
-  as separate arguments.
+  All values from the are then quoted as separate arguments.
 
 expand_template ( info, template )
 
@@ -343,6 +348,9 @@ sh { command, [arg ... ] [<option>=true ... ] }
   If .capture == true and .rstrip == true, then remove the trailing
     newline character from the command's output before returning the
     command's output.
+  If .capture == true and .to_list is a table, then capture the lines
+    of stdout to to_list.  .rstrip will determine whether or not the
+    newline character is captured at the end of each line.
   If .ignore == true, ignore the exit code of the command.
   If .popen == true, return the result of io.popen().
   If .popen == true and .iter_lines == true, then return an iterator
