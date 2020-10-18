@@ -19,6 +19,11 @@ may include breaking changes.
 
 [readme.txt version 20200816]
 
+[Note:  As of October 17, 2020, I have improved and made changes to
+lush.lua.  However, I have not updated this documentation.  I believe
+this documentation is still mostly correct, but there may be some
+inaccuracies.]
+
 
 ----  STRING EXPANSION  ----
 

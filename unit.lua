@@ -5,6 +5,7 @@
 --  Version 0.0.20200816
 
 
+package .path  =  './?.lua;' .. package .path
 lush  =  require  'lush' .import()
 
 
@@ -70,13 +71,16 @@ cmp(  ex  '$$a',     '$$a'       )
 cmp(  ex  '$g',      false       )
 cmp(  ex  '$a$g$a',  'bb'        )
 cmp(  ex  '$j',      '5'         )
-cmp(  ec  '$h',      'b  b  bb'  )
-
---  20200816
---p(  ec  ( h ),                'b  b  bb'  )
-cmp(  ec  ( expand ( h ) ),     'b  b  bb'  )
-
 cmp(  ec  '$a$g$a',  'bb'        )
+
+cmp(  ec  '$h',       'b  b  bb'                 )
+cmp(  ec  ( ex(h) ),  'b  b  bb'                 )
+cmp(  ec  { h },      'b  b  bb'                 )
+cmp(  ec  ( h ),      'b  b  bb'                 )
+
+cmp(  ec  { '$a',    '$g', '$a', '$a$g$a' },  'b  b  bb'  )
+cmp(  ec  ( '$a', 1, '$g', '$a', '$a$g$a' ),  'b  b  bb'  )
+
 
 cmp(  fn(  sh     '-true'     ),  'true  exit  0'       )
 cmp(  fn(  sh     '-false'    ),  'nil  exit  1'        )
@@ -147,15 +151,15 @@ cmp(  expand  '$ace',         '$$bar'  )
 cmp(  cap     'echo  $ace',   '$bar'  )
 cmp(  cap     'echo  $$ace',  '$bar'  )
 
-assert ( not is '-e /tmp/foo' )
-cat { '/tmp/foo', write='bar' }
-cmp(       cat '/tmp/foo'   , 'bar' )
-cmp(  fn ( cat '/tmp/foo' ) , 'bar' )
-cat { '/tmp/foo', append=' baz' }
-cmp(       cat '/tmp/foo'   , 'bar baz' )
-cmp(  fn ( cat '/tmp/foo' ) , "'bar baz'" )
-sh 'rm /tmp/foo'
-cmp(  cat { '/tmp/foo', ignore=true }, nil )
+assert ( not is '-e /tmp/unit_lua_test' )
+cat { '/tmp/unit_lua_foo', write='bar' }
+cmp(       cat '/tmp/unit_lua_foo'   , 'bar' )
+cmp(  fn ( cat '/tmp/unit_lua_foo' ) , 'bar' )
+cat { '/tmp/unit_lua_foo', append=' baz' }
+cmp(       cat '/tmp/unit_lua_foo'   , 'bar baz' )
+cmp(  fn ( cat '/tmp/unit_lua_foo' ) , "'bar baz'" )
+sh 'rm /tmp/unit_lua_foo'
+cmp(  cat { '/tmp/unit_lua_foo', ignore=true }, nil )
 
 function  a  ()  return  expand  ''  end
 function  b  ()  return  expand  '', nil  end
@@ -197,10 +201,65 @@ cmp( cap { 'echo a; echo b; echo c', to_list={} }, {'a','b','c'} )
 
 a  =  'c'
 b  =  'd'
-cmp(  cap { 'echo', '$a' },  '$a'  )
-cmp(  cap ( 'echo', '$a' ),  '$a'  )
-cmp(  cap ( 'echo', '$a $b' ),  '$a $b'  )
-cmp(  cap ( 'echo', '$a  $b' ),  '$a  $b'  )
+cmp(  cap ( { 'echo', '$a'     } ),  'c'     )
+cmp(  cap (   'echo', '$a'       ),  'c'     )
+cmp(  cap (   'echo', '$a $b'    ),  'c d'   )
+cmp(  cap (   'echo', '$a  $b'   ),  'c  d'  )
+
+
+a  =  'a1'
+b  =  'b1'
+c  =  '$a $b'
+d  =  { a, b }
+e  =  { '$a', '$b' }
+
+f  =  'f1 f2'
+g  =  'g1 g2'
+h  =  '$f $g'
+i  =  { f, g }
+j  =  { '$f', '$g' }
+
+k  =  'k1*'
+l  =  'l1* l2*'
+m  =  '$k $l'
+n  =  { k, l }
+o  =  { '$k', '$l' }
+
+cmp(  ec 'ls $a /tmp/*',  'ls a1 /tmp/*'       )
+cmp(  ec 'ls $c /tmp/*',  "ls 'a1 b1' /tmp/*"  )
+cmp(  ec 'ls $d /tmp/*',  'ls a1  b1 /tmp/*'   )
+cmp(  ec 'ls $e /tmp/*',  'ls a1  b1 /tmp/*'   )
+
+cmp(  ec 'ls $f /tmp/*',  "ls 'f1 f2' /tmp/*"           )
+cmp(  ec 'ls $h /tmp/*',  "ls 'f1 f2 g1 g2' /tmp/*"     )
+cmp(  ec 'ls $i /tmp/*',  "ls 'f1 f2'  'g1 g2' /tmp/*"  )
+cmp(  ec 'ls $j /tmp/*',  "ls 'f1 f2'  'g1 g2' /tmp/*"  )
+
+cmp(  ec 'ls $k /tmp/*',  "ls 'k1*' /tmp/*"             )
+cmp(  ec 'ls $m /tmp/*',  "ls 'k1* l1* l2*' /tmp/*"     )
+cmp(  ec 'ls $n /tmp/*',  "ls 'k1*'  'l1* l2*' /tmp/*"  )
+cmp(  ec 'ls $o /tmp/*',  "ls 'k1*'  'l1* l2*' /tmp/*"  )
+
+
+--  test glob()
+glob '*'    --  this test of glob should succeed
+
+
+--  test loop()
+function  iterate_to_ten  ()
+  local  n  =  0
+  local function  rv  ()
+    n  =  n + 1
+    if  n > 10  then  return  end
+    return  n  end
+  return  rv  end
+
+function  tally  ( n, rv )  rv.n  =  rv.n + n  end
+
+a  =  { n = 0 }
+loop ( tally, iterate_to_ten(), a )
+cmp(  a.n,  55  )
+
 
 
 

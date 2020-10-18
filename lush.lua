@@ -11,7 +11,10 @@ do    --------------------------------------------------  module encapsulation
   _ENV  =  setmetatable ( {}, mt )  end
 
 
-version  =  '0.0.20200816'
+version  =  '0.0.20201017'    ---------------------------------------  version
+
+
+local  module_name  =  ...    -----------------------------------  module_name
 
 
 function  assert_no_varargs  ( ... )    -------------------  assert_no_varargs
@@ -128,11 +131,20 @@ function  count  ( n )    ---------------------------------------------  count
   return  iter, nil, n-1  end
 
 
-function  dirname  ( s )    -----------------------------------------  dirname
-  return  s : match '^(.*)/'  end
+function  die  ( s )    -------------------------------------------------  die
+  s  =  expand ( s, 2 )
+  io .stderr : write ( 'die  ' .. s .. '\n' )
+  io .stderr : flush()
+  os .exit ( 1 )  end
+
+
+function  dirname  ( path )    --------------------------------------  dirname
+  path  =  expand ( path, 2 )
+  return  path : match '^(.*)/'  end
 
 
 function  each  ( t, i, j )    -----------------------------------------  each
+  if  t == nil  then  error ( expand 'each  t=nil  i=$i  j=$j' )  end
   if  type(t) == 'function'  then  t  =  t()  end
   assert ( type(t) == 'table', type(t) )
   local function  iter  ( st )    --  st  =  { t, k, v, i, j }
@@ -159,7 +171,7 @@ function  echo  ( s, ... )    ------------------------------------------  echo
   return  print ( command )  end
 
 
-local  nil_flag  =  {}    --  this empty table represents nil
+local  nil_flag  =  {}    --  this unique empty table represents nil
 
 
 function  expand_check ( o )    --------------------------------  expand_check
@@ -229,11 +241,21 @@ function  expand_string  ( o, s )    --------------------------  expand_string
   return  ( s : gsub ( expand_pattern, replace ) )  end
 
 
-function  expand_table  ( o, t )    ----------------------------  expand_table
+function  expand_table_20201016  ( o, t, rv )    ------  expand_table_20201016
   expand_check ( o )
   assert ( type(t) == 'table' )
-  local  rv  =  {}
+  rv  =  rv  or  {}
   for  n, v  in  ipairs ( t )  do  rv[n]  =  expand_value ( o, v )  end
+  return  rv  end
+
+
+function  expand_table  ( o, t, n )    -------------------------  expand_table
+  expand_check ( o )
+  assert ( type(t) == 'table' )
+  n  =  n  or  1
+  local  rv  =  {}
+  for  j  =  n, # t  do
+    table .insert ( rv, expand_value ( o, t[j] ) )  end
   return  rv  end
 
 
@@ -304,46 +326,38 @@ function  expand_template  ( o, s )   -----------------------  expand_template
 
 function  expand_command  ( o, level, ... )    ---------------  expand_command
 
-  --  note  expand command only expands o[1]
-  --        expand command does not expand o[2] ... o[n]
-  --        expand command does not expand varargs
-  --        therefore... consider renaming to prepare_command() ??
+  --  20201016  note
+  --    type(o[1]) == 'string' -> expanded as a template
+  --    type(o[1]) == 'table'  -> expanded as separate arguments
+  --    the rest o[]           -> expanded as separate arguments
+  --    varargs                -> expanded as separate argumnets
 
-  --  20200816  now allowing varags
-  --  assert_no_varargs ( ... )
-
-  local  function  varargs_append ( rv, ... )
-    local  t  =  { ... }
-    for  n = 1, select ( '#', ... )  do  table .insert ( rv, t[n] )  end
-    return  rv  end
-
-  local  function  flatten_and_quote  ( v, rv )
+  local function  flatten  ( v, rv )
     rv  =  rv  or  {}
-    if  v == false  then  --  do nothing
-    elseif  type(v) == 'string'  then  table .insert ( rv, quote ( v ) )
+    if      v == false           then  --  do nothing
+    elseif  type(v) == 'string'  then  table .insert ( rv, v )
     elseif  type(v) == 'table'   then
-      for  n, v  in  ipairs ( v )  do  flatten_and_quote ( v, rv )  end  end
+      for  n, e  in  ipairs ( v )  do  flatten ( e, rv )  end  end
     return  rv  end
 
-  local  o  =  normalize ( o, (level or 1 ) + 1 )
+  local  o   =  normalize ( o, (level or 1 ) + 1 )
+  local  av  =  o .argv
+  local  z   =  o .info_scrape    --  scraped variables for expansions
 
-  if  type(o[1]) == 'string'  then
-    --  in this case, o[1] is considered to be a template
-    local  first     =  { ( expand_template ( o .info_scrape, o[1] ) ) }
-    local  rest      =  table .move ( o, 2, #o, 1, {} )
-    local  rest      =  varargs_append ( rest, ... )
-    --  20200816
-    --cal  expanded  =  expand_table ( o .info_scrape, rest )
-    --cal  quoted    =  flatten_and_quote ( expanded, first )
-    local  quoted    =  flatten_and_quote ( rest, first )
-    return  table .concat ( quoted, '  ' )  end
+  if  type(av[1]) == 'string'  then
+    --  in this case, av[1] is considered to be a template
+    local  first     =  { ( expand_template  ( z, av[1] ) ) }
+    local  rest      =  quote ( expand_table ( z, av, 2 ) )
+    local  varargs   =  quote ( expand_table ( z, { ... } ) )
+    local  flat      =  flatten { first, rest, varargs }
+    return  table .concat ( flat, '  ' )  end
 
-  --  in this case, o does not contain a template
-  --  20200816
-  --cal  expanded  =  expand_table ( o .info_scrape, o )
-  --cal  quoted    =  flatten_and_quote ( expanded )
-  local  quoted    =  flatten_and_quote ( o )
-  return  table .concat ( quoted, '  ' )  end
+  type_check ( av[1], 'table' )
+
+  local  quoted   =  quote ( expand_table ( z, av      ) )
+  local  varargs  =  quote ( expand_table ( z, { ... } ) )
+  local  flat     =  flatten { quoted, varargs }
+  return  table .concat ( flat, '  ' )  end
 
 
 function  export  ( s )    -------------------------------------------  export
@@ -369,8 +383,18 @@ function  getcwd  ()    ----------------------------------------------  getcwd
 
 
 function  glob  ( pattern, flags )    ----------------------------------  glob
+
+  --  20201014  warning  version skew
+  --  luaposix v33  glob expects pattern
+  --  luaposix v34  glob expects ???
+  --  luaposix v35  glob expects pattern, flags
+
+  --  20201015  I assume luaposix v35
+
   local  glob  =  require 'posix.glob'
   if  type(pattern) == 'string'  then
+    pattern  =  expand ( pattern, 2 )
+    --  return  glob .glob ( pattern )  end
     return  glob .glob ( pattern, flags or 0 )  end
   error  'unimplemented'  end
 
@@ -454,10 +478,11 @@ function  info_scrape  ( level )    -----------------------------  info_scrape
 
 
 function  import  ()    ----------------------------------------------  import
-  local  s  =  [[  basename  cap  cat  cd  cond  each  echo  expand  export
-    extend  glob  has  is  popen  printf  read  sh  split  trace  writef  ]]
+  local  s  =  [[  basename  cap  cat  cd  cond  die  dirname  each  echo
+    expand  export  extend  glob  has  is  loop  popen  printf  read  sh
+    split  trace  writef  ]]
   for  k  in  s : gmatch '%S+'  do  _G[k]  =  _ENV[k]  end
-  return  _G .package .loaded .lush  end
+  return  _G .package .loaded [ module_name ]  end
 
 
 function  is  ( s )    ---------------------------------------------------  is
@@ -465,13 +490,23 @@ function  is  ( s )    ---------------------------------------------------  is
   return  cond ( normalize ( '[ ' .. s .. ' ]', 2 ) )  end
 
 
+function  loop  ( fn, iter, ... )    -----------------------------------  loop
+  while  true  do
+    local  v  =  iter()
+    if  v == nil  then  return  end
+    fn ( v, ... )  end  end
+
+
 function  normalize  ( o, level, k, v, k2, v2 )    ----------------  normalize
 
-  assert ( type(level) == 'number', type(level) )
+  type_check ( o, 'string', 'table' )
+  type_check ( level, 'number' )
 
   if  type(o) == 'string'  then  o  =  { o }  end
-  assert ( type(o) == 'table' )
-  if  type(o[1]) == 'string'  and  o[1] : match '^-'  then
+
+  o .argv  =  o.argv  or  o
+
+  if  type(o.argv[1]) == 'string'  and  o.argv[1] : match '^-'  then
     o .ignore  =  true  end
 
   if  o .info_scrape == nil  then
@@ -493,12 +528,18 @@ function  printf  ( format, ... )    ---------------------------------  printf
   print ( format and format : format ( ... ) or '' )  end
 
 
-
 function  quote  ( s )    ---------------------------------------------  quote
-  assert ( type(s) == 'string', 'quote  bad type  ' .. type(s) )
-  if  s == ''  then  return  "''"  end
-  return  s : find '[^-%w_./:]'  and
-    ( "'" .. s : gsub ( "'", "'\''" ) .. "'" )  or  s  end
+  if  s == false  then  return  false  end
+  if  type(s) == 'string'  then
+    if  s == ''  then  return  "''"  end
+    return  s : find '[^-%w_./:]'  and
+      ( "'" .. s : gsub ( "'", "'\''" ) .. "'" )  or  s
+  elseif  type(s) == 'table'  then
+    local  rv  =  {}
+    for  n, e  in  ipairs ( s )  do  rv[n]  =  quote ( s[n] )  end
+    return  rv  end
+  --  assert ( type(s) == 'string', 'quote  bad type  ' .. type(s) )
+  error ( 'quote  bad type  ' .. type(s) )  end
 
 
 function  read  ( path )    --------------------------------------------  read
@@ -584,6 +625,11 @@ function  split  ( v )    ---------------------------------------------  split
 
 function  trace  ( o, ... )    ----------------------------------------  trace
   return  sh ( normalize ( o, 2, 'trace', true ), ... )  end
+
+
+function  type_check ( v, a, b, c )    ---------------------------  type_check
+  if  type(v) == a  or  type(v) == b  then  return  end
+  error ( 'type_check failed  ' .. type(v), 2 )  end
 
 
 function  writef  ( format, ... )    ---------------------------------  writef
